@@ -1,50 +1,49 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import React from 'react';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid'; // Für Monatsansicht
+import timeGridPlugin from '@fullcalendar/timegrid'; // Für Wochen/Tagesansicht (Wichtig!)
+import interactionPlugin from '@fullcalendar/interaction'; // Für Klicks & Drag-and-Drop
+import './App.css';
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+  // Diese Funktion wird gefeuert, wenn du in den Kalender klickst
+  const handleDateClick = (arg: any) => {
+    // Später öffnen wir hier ein Fenster zum Eintragen
+    console.log('Datum angeklickt: ' + arg.dateStr);
+    alert('Du hast auf ' + arg.dateStr + ' geklickt!');
   }
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
+    <div style={{ height: '100vh', padding: '10px', boxSizing: 'border-box' }}>
+      <FullCalendar
+        plugins={[ dayGridPlugin, timeGridPlugin, interactionPlugin ]}
+        
+        // Start-Ansicht: Wochenansicht mit Uhrzeiten
+        initialView="timeGridWeek"
+        
+        // Kopfzeile konfigurieren
+        headerToolbar={{
+          left: 'prev,next today',
+          center: 'title',
+          right: 'dayGridMonth,timeGridWeek,timeGridDay'
         }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+
+        // Einstellungen für Deutschland/Schweiz
+        locale="de"
+        firstDay={1} // Woche startet am Montag
+        slotMinTime="06:00:00" // Kalender startet visuell um 6 Uhr morgens
+        slotMaxTime="22:00:00" // Geht bis 22 Uhr
+        allDaySlot={false} // Zeile für ganztägige Termine ausblenden (optional)
+        
+        // Interaktion aktivieren
+        selectable={true}
+        dateClick={handleDateClick}
+        
+        // Wichtig damit er die Höhe füllt
+        height="100%"
+      />
+    </div>
   );
 }
 
