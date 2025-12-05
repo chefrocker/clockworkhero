@@ -1,50 +1,115 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import React, { useState, useEffect, useRef } from 'react';
+import { listen } from '@tauri-apps/api/event';
+// WICHTIG: Der Import für Tauri v2
+import Database from '@tauri-apps/plugin-sql'; 
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import './App.css';
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [currentWindow, setCurrentWindow] = useState("Warte auf Tracking...");
+  const [db, setDb] = useState<Database | null>(null);
+  
+  // Wir nutzen useRef, um den letzten gespeicherten Titel zu merken,
+  // damit wir nicht doppelt speichern, wenn React neu rendert.
+  const lastSavedTitle = useRef<string>("");
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+  // 1. Datenbank verbinden beim Start
+  useEffect(() => {
+    async function initDb() {
+      try {
+        console.log("Versuche Datenbank zu laden...");
+        // Verbindung zu 'tracker.db' herstellen (wird automatisch erstellt)
+        const database = await Database.load("sqlite:tracker.db");
+        
+        // Tabelle erstellen, falls sie noch nicht existiert
+        await database.execute(
+          `CREATE TABLE IF NOT EXISTS logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            title TEXT, 
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )`
+        );
+        
+        setDb(database);
+        console.log("Datenbank verbunden und Tabelle bereit!");
+      } catch (e) {
+        console.error("KRITISCHER DATENBANK FEHLER:", e);
+      }
+    }
+    initDb();
+  }, []);
+
+  // 2. Tracking Event Listener
+  useEffect(() => {
+    const unlistenPromise = listen('active-window-change', async (event) => {
+      const newTitle = event.payload as string;
+      setCurrentWindow(newTitle);
+
+      // Logik: Nur speichern, wenn sich der Titel geändert hat UND wir eine DB haben
+      if (db && newTitle !== lastSavedTitle.current && newTitle !== "Unbekannt") {
+        try {
+          console.log("Speichere in DB:", newTitle);
+          
+          await db.execute(
+            "INSERT INTO logs (title) VALUES ($1)", 
+            [newTitle]
+          );
+          
+          // Merken, dass wir diesen Titel gerade gespeichert haben
+          lastSavedTitle.current = newTitle;
+        } catch (e) {
+          console.error("Fehler beim Speichern:", e);
+        }
+      }
+    });
+
+    return () => {
+      unlistenPromise.then(unlisten => unlisten());
+    };
+  }, [db]); // Wichtig: Dieser Effekt hängt von 'db' ab
+
+  const handleDateClick = (arg: any) => {
+    console.log('Datum angeklickt: ' + arg.dateStr);
   }
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      
+      <div style={{ 
+        background: '#2c3e50', 
+        color: 'white', 
+        padding: '10px', 
+        textAlign: 'center',
+        fontWeight: 'bold',
+        fontFamily: 'monospace',
+        borderBottom: '2px solid #34495e'
+      }}>
+        Aktives Fenster: {currentWindow}
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
+      <div style={{ flex: 1, padding: '10px', boxSizing: 'border-box', overflow: 'hidden' }}>
+        <FullCalendar
+          plugins={[ dayGridPlugin, timeGridPlugin, interactionPlugin ]}
+          initialView="timeGridWeek"
+          headerToolbar={{
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+          }}
+          locale="de"
+          firstDay={1}
+          slotMinTime="06:00:00"
+          slotMaxTime="22:00:00"
+          allDaySlot={false}
+          selectable={true}
+          dateClick={handleDateClick}
+          height="100%"
         />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      </div>
+    </div>
   );
 }
 
