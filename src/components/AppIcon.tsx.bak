@@ -1,60 +1,110 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { IconType } from 'react-icons';
 import { 
-    FaChrome, FaFirefox, FaEdge, FaOpera, 
+    FaChrome, FaFirefox, FaEdge, FaOpera, FaSafari,
     FaWindows, FaApple, FaLinux, 
-    FaSpotify, FaDiscord, FaSlack, FaWhatsapp, 
+    FaSpotify, FaDiscord, FaSlack, FaWhatsapp, FaTelegram,
     FaFileWord, FaFileExcel, FaFilePowerpoint, FaFilePdf, 
-    FaCode, FaTerminal, FaGitAlt, FaFolderOpen, FaCog
+    FaCode, FaTerminal, FaGitAlt, FaFolderOpen, FaCog, FaCalculator, FaCamera,
+    FaUsers, FaImage, FaPlayCircle
 } from 'react-icons/fa';
 import { VscCode, VscTerminal } from 'react-icons/vsc';
-import { SiMicrosoftteams, SiAdobephotoshop, SiIntellijidea, SiVlc } from 'react-icons/si';
+import { SiMicrosoftteams, SiAdobephotoshop, SiIntellijidea, SiVlc, SiNotion, SiPostman } from 'react-icons/si';
 
 interface Props {
-  path?: string; // Wird aktuell nicht genutzt, da wir auf Namen mappen
+  path?: string;      // Echter Pfad (C:\...)
+  appName?: string;   // Name (Google Chrome)
   fallbackColor: string;
   className?: string;
 }
 
-export const AppIcon: React.FC<Props> = ({ path, fallbackColor, className }) => {
-  // Wir nutzen den Pfad oder Namen, um das Icon zu bestimmen.
-  // Da wir im Renderer "simpleName" haben, nutzen wir hier eine Mapping-Logik.
-  // Der "path" Prop enthält hier oft den Namen oder Pfad.
+// Globaler Cache für Base64 Bilder (Performance!)
+const iconCache = new Map<string, string>();
+
+// Fallback Mapping (falls Rust fehlschlägt)
+const ICON_MAP: Record<string, IconType> = {
+  'chrome': FaChrome, 'firefox': FaFirefox, 'edge': FaEdge, 'opera': FaOpera,
+  'word': FaFileWord, 'excel': FaFileExcel, 'powerpoint': FaFilePowerpoint, 'outlook': FaFileWord,
+  'teams': FaUsers, 'pdf': FaFilePdf,
+  'code': VscCode, 'vscode': VscCode, 'visual studio': VscCode, 'intellij': SiIntellijidea,
+  'terminal': VscTerminal, 'powershell': VscTerminal, 'cmd': VscTerminal, 'git': FaGitAlt,
+  'spotify': FaSpotify, 'discord': FaDiscord, 'slack': FaSlack, 'whatsapp': FaWhatsapp,
+  'vlc': FaPlayCircle, 'photoshop': FaImage, 'explorer': FaFolderOpen, 'settings': FaCog
+};
+
+export const AppIcon: React.FC<Props> = ({ path, appName, fallbackColor, className }) => {
+  const [iconSrc, setIconSrc] = useState<string | null>(null);
+  const [useFallback, setUseFallback] = useState(false);
+
+  useEffect(() => {
+    // Reset bei Änderung
+    setIconSrc(null);
+    setUseFallback(false);
+
+    if (!path) {
+        setUseFallback(true);
+        return;
+    }
+
+    // 1. Cache Check
+    if (iconCache.has(path)) {
+        setIconSrc(iconCache.get(path)!);
+        return;
+    }
+
+    // 2. Rust Call (Native Windows API)
+    let isMounted = true;
+    invoke<string>('get_exe_icon', { path })
+      .then((base64) => {
+        if (isMounted) {
+            if (base64 && base64.length > 50) { // Validitätscheck
+                iconCache.set(path, base64);
+                setIconSrc(base64);
+            } else {
+                setUseFallback(true);
+            }
+        }
+      })
+      .catch(() => {
+        if (isMounted) setUseFallback(true);
+      });
+
+    return () => { isMounted = false; };
+  }, [path]);
+
+  // STRATEGIE A: Echtes System-Icon (Base64 Bild)
+  if (iconSrc) {
+    return <img src={iconSrc} alt={appName} className={className} style={{ objectFit: 'contain' }} />;
+  }
+
+  // STRATEGIE B: Mapping Liste (Fallback)
+  if (useFallback || !path) {
+      const searchString = (appName || path || '').toLowerCase();
+      const matchedKey = Object.keys(ICON_MAP).find(key => searchString.includes(key));
+      
+      if (matchedKey) {
+          const IconComponent = ICON_MAP[matchedKey];
+          // Wir nutzen die Fallback-Farbe für das Icon
+          return <IconComponent style={{ color: fallbackColor }} className={className} />;
+      }
+  }
+
+  // STRATEGIE C: Initialen (Letzter Ausweg)
+  // Sieht aus wie ein Avatar (z.B. "N" für Notepad)
+  const initial = appName ? appName.charAt(0).toUpperCase() : '?';
   
-  const name = path ? path.toLowerCase() : '';
-
-  const iconStyle = { width: '20px', height: '20px', color: '#555' };
-
-  // Browser
-  if (name.includes('chrome')) return <FaChrome style={{...iconStyle, color: '#f1c40f'}} className={className} />;
-  if (name.includes('firefox')) return <FaFirefox style={{...iconStyle, color: '#e67e22'}} className={className} />;
-  if (name.includes('edge')) return <FaEdge style={{...iconStyle, color: '#3498db'}} className={className} />;
-  if (name.includes('opera')) return <FaOpera style={{...iconStyle, color: '#e74c3c'}} className={className} />;
-
-  // Dev
-  if (name.includes('code') || name.includes('visual studio')) return <VscCode style={{...iconStyle, color: '#007acc'}} className={className} />;
-  if (name.includes('intellij')) return <SiIntellijidea style={{...iconStyle, color: '#ff318c'}} className={className} />;
-  if (name.includes('terminal') || name.includes('powershell') || name.includes('cmd')) return <VscTerminal style={{...iconStyle, color: '#333'}} className={className} />;
-  if (name.includes('git')) return <FaGitAlt style={{...iconStyle, color: '#f1502f'}} className={className} />;
-
-  // Office
-  if (name.includes('word')) return <FaFileWord style={{...iconStyle, color: '#2b579a'}} className={className} />;
-  if (name.includes('excel')) return <FaFileExcel style={{...iconStyle, color: '#217346'}} className={className} />;
-  if (name.includes('powerpoint')) return <FaFilePowerpoint style={{...iconStyle, color: '#d24726'}} className={className} />;
-  if (name.includes('teams')) return <SiMicrosoftteams style={{...iconStyle, color: '#6264a7'}} className={className} />;
-  if (name.includes('pdf') || name.includes('acrobat')) return <FaFilePdf style={{...iconStyle, color: '#e74c3c'}} className={className} />;
-
-  // Social / Media
-  if (name.includes('spotify')) return <FaSpotify style={{...iconStyle, color: '#1db954'}} className={className} />;
-  if (name.includes('discord')) return <FaDiscord style={{...iconStyle, color: '#5865f2'}} className={className} />;
-  if (name.includes('slack')) return <FaSlack style={{...iconStyle, color: '#4a154b'}} className={className} />;
-  if (name.includes('whatsapp')) return <FaWhatsapp style={{...iconStyle, color: '#25d366'}} className={className} />;
-  if (name.includes('photoshop')) return <SiAdobephotoshop style={{...iconStyle, color: '#31a8ff'}} className={className} />;
-  if (name.includes('vlc')) return <SiVlc style={{...iconStyle, color: '#e67e22'}} className={className} />;
-
-  // System
-  if (name.includes('explorer')) return <FaFolderOpen style={{...iconStyle, color: '#f39c12'}} className={className} />;
-  if (name.includes('settings') || name.includes('einstellungen')) return <FaCog style={{...iconStyle, color: '#7f8c8d'}} className={className} />;
-
-  // Fallback: Windows Logo in der App-Farbe
-  return <FaWindows style={{...iconStyle, color: '#7f8c8d'}} className={className} />;
+  return (
+    <div className={className} style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(255,255,255,0.5)', 
+      color: fallbackColor, 
+      fontWeight: '900', 
+      borderRadius: '4px',
+      fontSize: '0.8em',
+      width: '100%', height: '100%'
+    }}>
+      {initial}
+    </div>
+  );
 };

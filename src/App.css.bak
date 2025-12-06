@@ -1,107 +1,152 @@
+/* --- GLOBAL --- */
 html, body, #root {
   height: 100%; margin: 0; padding: 0; overflow: hidden;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f3f4f6;
+  font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f8fafc; /* Slate-50 */
+  color: #334155; /* Slate-700 */
 }
 
 .app-container { height: 100vh; display: flex; flex-direction: column; }
-.calendar-wrapper { flex: 1; overflow: hidden; }
+.calendar-wrapper { flex: 1; overflow: hidden; position: relative; }
 
-/* --- HEADER (Buttons rechts fixiert) --- */
+/* --- HEADER --- */
 .app-header {
-  background: white; padding: 15px 25px;
-  display: flex; 
-  justify-content: space-between; /* Schiebt Status nach links, Controls nach rechts */
-  align-items: center;
-  border-bottom: 1px solid #eee; 
-  box-shadow: 0 4px 15px rgba(0,0,0,0.03); 
-  z-index: 100;
-  width: 100%; /* Sicherstellen, dass er die volle Breite nutzt */
-  box-sizing: border-box;
+  background: white; 
+  padding: 12px 24px;
+  display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 1px solid #e2e8f0; 
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+  z-index: 50;
 }
 
-.header-status { font-size: 1.1rem; font-weight: 800; color: #2c3e50; display: flex; alignItems: center; gap: 10px; }
-.status-dot { width: 12px; height: 12px; borderRadius: 50%; background: #e74c3c; }
-.status-dot.active { background: #27ae60; }
+.header-status { 
+  font-size: 0.95rem; font-weight: 700; color: #475569; 
+  display: flex; align-items: center; gap: 8px; 
+  background: #f1f5f9; padding: 6px 12px; border-radius: 20px;
+}
+.status-dot { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,0.2); }
+.status-dot.active { background: #10b981; box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
 
-.header-controls { 
-  display: flex; 
-  gap: 12px; 
-  margin-left: auto; /* Zwingt die Gruppe nach rechts, falls justify versagt */
+.header-controls { display: flex; gap: 10px; }
+
+/* --- BUTTONS (Modern) --- */
+button { 
+  display: flex; align-items: center; gap: 8px; 
+  font-family: inherit; transition: all 0.15s ease; cursor: pointer; 
+  font-size: 0.9rem; border: 1px solid transparent;
 }
 
-/* --- BUTTONS --- */
-button { display: flex; align-items: center; gap: 6px; font-family: inherit; transition: all 0.2s; cursor: pointer; }
-.btn-secondary { padding: 10px 20px; background: #34495e; color: white; border: none; border-radius: 8px; font-weight: 600; }
-.btn-toggle { padding: 10px 20px; background: #95a5a6; color: white; border: none; border-radius: 8px; font-weight: 600; }
-.btn-toggle.active { background: #27ae60; }
-.btn-refresh { padding: 10px 20px; background: #ecf0f1; color: #2c3e50; border: none; border-radius: 8px; font-weight: 600; }
-.btn-save { background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 1rem; }
-.btn-save:hover { background: #219150; transform: translateY(-1px); }
-.btn-close { background: #95a5a6; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 1rem; }
-.btn-close:hover { background: #7f8c8d; }
+.btn-secondary { 
+  padding: 8px 16px; background: white; color: #475569; 
+  border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600; 
+}
+.btn-secondary:hover { background: #f8fafc; border-color: #94a3b8; }
 
-/* --- INPUTS (Modern) --- */
-.input-label { display: block; font-weight: 700; margin-bottom: 6px; color: #34495e; font-size: 0.9rem; }
+.btn-toggle { 
+  padding: 8px 16px; background: #334155; color: white; 
+  border-radius: 6px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+.btn-toggle:hover { background: #1e293b; }
+.btn-toggle.active { background: #10b981; } /* Emerald Green */
+.btn-toggle.active:hover { background: #059669; }
+
+.btn-refresh { 
+  padding: 8px; background: transparent; color: #64748b; 
+  border-radius: 6px; font-size: 1.1rem;
+}
+.btn-refresh:hover { background: #f1f5f9; color: #334155; }
+
+.btn-save { background: #10b981; color: white; padding: 10px 24px; border-radius: 6px; font-weight: 600; }
+.btn-save:hover { background: #059669; transform: translateY(-1px); box-shadow: 0 4px 6px rgba(16,185,129,0.2); }
+
+.btn-close { background: #94a3b8; color: white; padding: 10px 20px; border-radius: 6px; font-weight: 600; }
+.btn-close:hover { background: #64748b; }
+
+/* --- INPUTS --- */
+.input-label { display: block; font-weight: 600; margin-bottom: 6px; color: #475569; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
 .input-text, .input-select, .input-time, .input-number { 
-  width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #e0e0e0; 
-  font-size: 1rem; box-sizing: border-box; background: #f9f9f9; transition: border 0.2s;
+  width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid #cbd5e1; 
+  font-size: 0.95rem; background: white; transition: border 0.2s, box-shadow 0.2s;
 }
-.input-text:focus, .input-select:focus, .input-time:focus, .input-number:focus { 
-  outline: none; border-color: #3498db; background: white; 
-}
-.input-row { display: flex; gap: 15px; margin-bottom: 15px; }
+.input-text:focus, .input-select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+.input-row { display: flex; gap: 15px; margin-bottom: 20px; }
 .input-group { flex: 1; }
 
-/* --- KALENDER STYLES --- */
+/* --- KALENDER CORE --- */
 .fc { height: 100%; background-color: white; }
-.fc-timegrid-slot { height: 80px !important; border-bottom: 1px solid #f1f2f6; }
-.fc-event { border: none !important; background: transparent !important; box-shadow: none !important; min-height: 45px !important; margin-right: 5px !important; overflow: visible !important; }
+.fc-timegrid-slot { height: 60px !important; border-bottom: 1px solid #f1f5f9; } /* Etwas kompakter */
+.fc-timegrid-slot-label-cushion { font-size: 0.85rem; font-weight: 600; color: #94a3b8; }
+.fc-col-header-cell-cushion { padding: 10px; color: #334155; font-weight: 700; }
+.fc-event { border: none !important; background: transparent !important; box-shadow: none !important; min-height: 30px !important; margin: 0 2px !important; overflow: visible !important; }
 
-/* --- LAYER 1: MANUELLE ARBEITSZEIT (Modern Card Design) --- */
+/* --- LAYER 1: SESSIONS (Manuell) --- */
 .manual-session-block {
   display: flex; flex-direction: column; justify-content: center;
-  padding: 8px 12px; height: 100%; width: 100%;
-  border-radius: 8px; 
+  padding: 6px 10px; height: 100%; width: 100%;
+  border-radius: 6px; 
   background: white; 
-  /* Dickerer linker Rand in Projektfarbe */
-  border-left-width: 6px; 
-  border-left-style: solid;
-  /* Subtiler Schatten + leichter Border für Kontrast */
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05);
-  border-top: 1px solid #f0f0f0;
-  border-right: 1px solid #f0f0f0;
-  border-bottom: 1px solid #f0f0f0;
-  z-index: 1000; position: relative;
+  border-left-width: 5px; border-left-style: solid;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  border-top: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;
+  z-index: 50; position: relative;
   transition: transform 0.1s, box-shadow 0.1s;
 }
-.manual-session-block:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
-  z-index: 1001;
-}
-.manual-session-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-.manual-session-title { font-weight: 800; font-size: 0.95rem; letter-spacing: -0.3px; }
-.manual-session-desc { font-size: 0.85rem; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.btn-delete-session { background: rgba(231, 76, 60, 0.1); color: #c0392b; border: none; border-radius: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
-.btn-delete-session:hover { background: #c0392b; color: white; }
+.manual-session-block:hover { transform: translateY(-1px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); z-index: 100; }
 
-/* --- LAYER 2: PROGRAMM LAYER --- */
+.manual-session-title { font-weight: 700; font-size: 0.9rem; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.manual-session-desc { font-size: 0.8rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* --- LAYER 2: ACTIVITY STREAM (Auto) --- */
 .app-block {
   display: flex; flex-direction: column; justify-content: center;
-  padding: 0 12px; height: 100%; width: 100%;
-  border-radius: 8px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(0,0,0,0.05) 100%);
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-  border-left: 5px solid rgba(0,0,0,0.2);
-  border-top: 1px solid rgba(255,255,255,0.4);
+  padding: 0 8px; height: 100%; width: 100%;
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(0,0,0,0.05) 100%);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  border-left: 4px solid rgba(0,0,0,0.15);
 }
-.block-title { font-weight: 700; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.block-title { 
+  font-weight: 600; color: white; font-size: 0.85rem;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3); 
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
+}
+
+/* --- WOCHENANSICHT OPTIMIERUNG --- */
+/* Wenn wir in der Wochenansicht sind (FullCalendar Klasse), passen wir die Blöcke an */
+.fc-timeGridWeek-view .manual-session-block {
+  padding: 2px 4px; /* Weniger Padding */
+  border-left-width: 3px; /* Dünnerer Rand */
+}
+.fc-timeGridWeek-view .manual-session-title { font-size: 0.75rem; }
+.fc-timeGridWeek-view .manual-session-desc { display: none; } /* Beschreibung ausblenden für Platz */
 
 /* --- MODAL --- */
-.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(44, 62, 80, 0.6); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 9999; }
-.modal-content { background: white; border-radius: 16px; width: 500px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); overflow: hidden; animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-.modal-header { padding: 25px; color: white; display: flex; align-items: center; gap: 15px; }
-.modal-body { padding: 30px; }
-.modal-footer { padding: 20px 30px; text-align: right; background: #f8f9fa; display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid #eee; }
-@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 9999; }
+.modal-content { background: white; border-radius: 12px; width: 480px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); overflow: hidden; animation: slideUp 0.2s ease-out; }
+.modal-header { padding: 20px 24px; color: white; display: flex; align-items: center; gap: 12px; }
+.modal-body { padding: 24px; }
+.modal-footer { padding: 16px 24px; background: #f8fafc; display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid #e2e8f0; }
+@keyframes slideUp { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+/* --- WOCHENANSICHT OPTIMIERUNG --- */
+.fc-timeGridWeek-view .app-block {
+  /* In der Wochenansicht Padding reduzieren */
+  padding: 0 2px;
+  border-left-width: 3px;
+}
+
+/* Icon in der Wochenansicht etwas kleiner, aber sichtbar */
+.fc-timeGridWeek-view .activity-icon {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* In der Wochenansicht den Titel ausblenden, wenn zu wenig Platz ist */
+.fc-timeGridWeek-view .block-title {
+  display: none; /* Nur Icon anzeigen für Sauberkeit */
+}
+
+/* Container für Icon in Wochenansicht zentrieren */
+.fc-timeGridWeek-view .app-block > div {
+  justify-content: center;
+  width: 100%;
+}

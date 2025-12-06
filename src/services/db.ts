@@ -2,18 +2,16 @@ import Database from '@tauri-apps/plugin-sql';
 import { LogEntry, Project, ColorEntry, WorkSession, ActivitySubEvent } from '../types';
 
 // --- HELPER ---
-
 function stringToColor(str: string) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
   const h = Math.abs(hash) % 360;
-  // Helle Pastellfarben für den Hintergrund (Activity Stream)
   return `hsl(${h}, 70%, 85%)`; 
 }
 
 function simplifyAppName(title: string): string {
   const t = title.toLowerCase();
-  // Mapping auf Haupt-App-Namen für besseres Gruppieren
+  // Mapping auf Haupt-App-Namen
   if (t.includes('chrome')) return 'Google Chrome';
   if (t.includes('firefox')) return 'Firefox';
   if (t.includes('edge')) return 'Edge';
@@ -25,8 +23,6 @@ function simplifyAppName(title: string): string {
   if (t.includes('discord')) return 'Discord';
   if (t.includes('teams')) return 'Microsoft Teams';
   if (t.includes('explorer')) return 'Explorer';
-  
-  // Fallback: Alles vor dem Bindestrich
   return title.split(' - ')[0].trim() || title; 
 }
 
@@ -89,8 +85,9 @@ export async function deleteSession(db: Database, id: string) {
   await db.execute("DELETE FROM work_sessions WHERE id = $1", [realId]);
 }
 
-// --- LOAD ALL (INTELLIGENTES CLUSTERING) ---
-export async function loadAllEvents(db: Database, editMode: boolean): Promise<any[]> {
+// --- LOAD ALL (DYNAMISCHES CLUSTERING) ---
+// NEU: groupingThresholdMinutes Parameter
+export async function loadAllEvents(db: Database, editMode: boolean, groupingThresholdMinutes: number): Promise<any[]> {
   const allEvents = [];
   const colorCache = new Map<string, string>();
   const colors = await db.select<ColorEntry[]>("SELECT * FROM app_colors");
@@ -131,16 +128,14 @@ export async function loadAllEvents(db: Database, editMode: boolean): Promise<an
       
       const appName = simplifyAppName(log.title);
       
-      // CLUSTERING LOGIK:
-      // Wir erlauben Lücken von bis zu 5 Minuten, solange es die gleiche App ist.
+      // DYNAMISCHES CLUSTERING:
+      // Wir nutzen den übergebenen Threshold (5 Min für Tag, 60 Min für Woche)
       const gapInMinutes = (logTime.getTime() - currentGroup.end.getTime()) / 60000;
       
-      if (appName === currentGroup.appName && gapInMinutes <= 5) {
+      if (appName === currentGroup.appName && gapInMinutes <= groupingThresholdMinutes) {
         // GRUPPE ERWEITERN
-        // Wir setzen das Ende auf den aktuellen Log + 1 Minute
         currentGroup.end = new Date(logTime.getTime() + 60000);
         
-        // SubEvent hinzufügen (nur wenn Titel anders, um Spam zu vermeiden)
         const lastSub = currentGroup.subEvents[currentGroup.subEvents.length - 1];
         if (lastSub.title !== log.title) {
             currentGroup.subEvents.push({
@@ -152,7 +147,6 @@ export async function loadAllEvents(db: Database, editMode: boolean): Promise<an
         // GRUPPE ABSCHLIESSEN
         const color = await getColor(currentGroup.appName);
         
-        // Nur hinzufügen, wenn Dauer > 0
         if (currentGroup.end > currentGroup.start) {
             allEvents.push({
               id: 'auto-group-' + i,
@@ -173,7 +167,7 @@ export async function loadAllEvents(db: Database, editMode: boolean): Promise<an
             });
         }
 
-        // NEUE GRUPPE STARTEN
+        // NEUE GRUPPE
         currentGroup = {
           appName: appName,
           exePath: log.exe_path,

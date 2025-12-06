@@ -127,3 +127,54 @@ button {
 .modal-body { padding: 24px; }
 .modal-footer { padding: 16px 24px; background: #f8fafc; display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid #e2e8f0; }
 @keyframes slideUp { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+/* --- WOCHENANSICHT OPTIMIERUNG --- */
+.fc-timeGridWeek-view .app-block {
+  /* In der Wochenansicht Padding reduzieren */
+  padding: 0 2px;
+  border-left-width: 3px;
+}
+
+/* Icon in der Wochenansicht etwas kleiner, aber sichtbar */
+.fc-timeGridWeek-view .activity-icon {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* In der Wochenansicht den Titel ausblenden, wenn zu wenig Platz ist */
+.fc-timeGridWeek-view .block-title {
+  display: none; /* Nur Icon anzeigen für Sauberkeit */
+}
+
+/* Container für Icon in Wochenansicht zentrieren */
+.fc-timeGridWeek-view .app-block > div {
+  justify-content: center;
+  width: 100%;
+}
+/* ... (Bestehender Code) ... */
+
+/* --- WATERMARK ICON STYLES --- */
+.watermark-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* Verhindert Verzerren */
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+}
+
+/* --- WOCHENANSICHT OPTIMIERUNG --- */
+.fc-timeGridWeek-view .app-block {
+  border-left-width: 0; /* Kein Rand in Woche, Icon reicht */
+}
+
+/* In der Wochenansicht Titel ausblenden, wenn Block zu klein */
+.fc-timeGridWeek-view .activity-title-overlay {
+  display: none; /* Nur Icon anzeigen für maximale Sauberkeit */
+}
+
+/* In der Wochenansicht das Icon noch größer und zentrierter machen */
+.fc-timeGridWeek-view .app-block > div:last-child {
+  width: 80% !important;
+  height: 80% !important;
+  right: 10% !important;
+  bottom: 10% !important;
+  opacity: 0.5 !important; /* Etwas sichtbarer */
+}

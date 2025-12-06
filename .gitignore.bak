@@ -22,16 +22,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-# Datenbanken ignorieren
-*.db
-*.db-shm
-*.db-wal
-tracker.db
-
-# Logs und Systemdateien
-logs/
-*.log
-node_modules/
-target/
-dist/
-src-tauri/target/

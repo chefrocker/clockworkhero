@@ -6,11 +6,15 @@ import { FaPen, FaSave, FaBriefcase, FaFolderPlus, FaTrash, FaCalendarDay, FaCal
 import { initDatabase, logActiveWindow, loadAllEvents, loadProjects, addProject, deleteProject, saveSession, deleteSession } from './services/db';
 import { CalendarEngine } from './components/CalendarEngine';
 import { SessionModal } from './components/SessionModal';
-import { ActivityDetailModal } from './components/ActivityDetailModal'; // NEU
+import { ActivityDetailModal } from './components/ActivityDetailModal';
 import { Project } from './types';
 import './App.css';
 
-interface WindowInfo { title: String; path: String; }
+// Interface für die Daten aus Rust
+interface WindowInfo {
+    title: string;
+    path: string;
+}
 
 function App() {
   const [db, setDb] = useState<Database | null>(null);
@@ -18,15 +22,17 @@ function App() {
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   
+  // UI States
   const [isEditMode, setIsEditMode] = useState(false);
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
+  
+  // Modals
   const [showProjectManager, setShowProjectManager] = useState(false);
   const [showSessionModal, setShowSessionModal] = useState(false);
-  
-  // NEU: State für Activity Details
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
 
+  // Temp Data
   const [selection, setSelection] = useState<{start: Date, end: Date} | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<number | undefined>(undefined);
 
@@ -35,39 +41,60 @@ function App() {
 
   const lastSavedTitle = useRef<string>("");
 
+  // 1. INIT
   useEffect(() => {
     async function start() {
       try {
         const database = await initDatabase();
         setDb(database);
-        refreshData(database, isEditMode);
-      } catch (e) { console.error(e); }
+        refreshData(database, isEditMode, viewMode);
+      } catch (e) { console.error("DB Init Error:", e); }
     }
     start();
   }, []);
 
+  // 2. TRACKING
   useEffect(() => {
     const unlistenPromise = listen('active-window-change', async (event) => {
       const info = event.payload as WindowInfo;
-      const title = info.title as string;
-      const path = info.path as string;
+      const title = info.title || "Unbekannt";
+      const path = info.path || "";
+
+      // Debugging (kann später entfernt werden)
+      // console.log("Tracking:", title, path);
+
       setCurrentWindow(title);
+
       if (db && title !== lastSavedTitle.current && title !== "Unbekannt") {
-        await logActiveWindow(db, title, path);
-        lastSavedTitle.current = title;
+        try {
+            await logActiveWindow(db, title, path);
+            lastSavedTitle.current = title;
+            // Wir laden NICHT bei jedem Event neu, das flackert. 
+            // Der User drückt "Refresh" oder wechselt den Modus.
+        } catch (e) {
+            console.error("Fehler beim Speichern:", e);
+        }
       }
     });
     return () => { unlistenPromise.then(unlisten => unlisten()); };
-  }, [db]);
+  }, [db]); // Abhängigkeiten minimiert für Performance
 
-  useEffect(() => { if (db) refreshData(db, isEditMode); }, [isEditMode]);
+  // 3. RELOAD bei Modus-Wechsel oder View-Wechsel
+  useEffect(() => { 
+      if (db) refreshData(db, isEditMode, viewMode); 
+  }, [isEditMode, viewMode]);
 
-  async function refreshData(database: Database, editMode: boolean) {
-    const events = await loadAllEvents(database, editMode);
+  async function refreshData(database: Database, editMode: boolean, currentView: 'day' | 'week') {
+    // Tag: 5 Min Toleranz, Woche: 60 Min Toleranz
+    const threshold = currentView === 'week' ? 60 : 5;
+    
+    const events = await loadAllEvents(database, editMode, threshold);
     const projs = await loadProjects(database);
     setCalendarEvents(events);
     setProjects(projs);
   }
+
+  // --- HANDLER ---
 
   const handleDateSelect = (info: any) => {
     setSelection({ start: info.start, end: info.end });
@@ -78,14 +105,14 @@ function App() {
   const handleEventClick = (info: any) => {
     const props = info.event.extendedProps;
     
-    // FALL 1: Manuelle Session -> Editieren
+    // Manuelle Session -> Editieren
     if (props.type === 'manual' && isEditMode) {
         setSelection({ start: info.event.start, end: info.event.end });
         setEditingSessionId(props.dbId);
         setShowSessionModal(true);
     }
     
-    // FALL 2: Activity Stream -> Details anzeigen (Nur im Analyse Modus)
+    // Activity Stream -> Details (Nur im Analyse Modus)
     if (props.type === 'auto' && !isEditMode) {
         setSelectedActivity({
             title: props.simpleName,
@@ -101,7 +128,7 @@ function App() {
       const props = info.event.extendedProps;
       if (db && props.type === 'manual') {
           await saveSession(db, info.event.start, info.event.end, props.projectId, props.description, props.dbId);
-          refreshData(db, isEditMode);
+          refreshData(db, isEditMode, viewMode);
       }
   };
 
@@ -109,14 +136,14 @@ function App() {
     if (db) {
       await saveSession(db, start, end, projectId, desc, editingSessionId);
       setShowSessionModal(false);
-      refreshData(db, isEditMode);
+      refreshData(db, isEditMode, viewMode);
     }
   };
 
   const handleDeleteSession = async (id: string) => {
     if (db) {
       await deleteSession(db, id);
-      refreshData(db, isEditMode);
+      refreshData(db, isEditMode, viewMode);
     }
   };
 
@@ -124,21 +151,20 @@ function App() {
     if (db && newProjectName) {
       await addProject(db, newProjectName, newProjectColor);
       setNewProjectName("");
-      refreshData(db, isEditMode);
+      refreshData(db, isEditMode, viewMode);
     }
   };
 
   const handleDeleteProject = async (id: number) => {
     if (db) {
       await deleteProject(db, id);
-      refreshData(db, isEditMode);
+      refreshData(db, isEditMode, viewMode);
     }
   };
 
   return (
     <div className="app-container">
       
-      {/* MODAL: ARBEITSZEIT */}
       <SessionModal 
         isOpen={showSessionModal}
         onClose={() => setShowSessionModal(false)}
@@ -148,7 +174,6 @@ function App() {
         projects={projects}
       />
 
-      {/* MODAL: ACTIVITY DETAILS (NEU) */}
       <ActivityDetailModal 
         isOpen={showActivityModal}
         onClose={() => setShowActivityModal(false)}
@@ -158,7 +183,6 @@ function App() {
         subEvents={selectedActivity?.subEvents || []}
       />
 
-      {/* MODAL: PROJEKTE */}
       {showProjectManager && (
         <div className="modal-overlay" onClick={() => setShowProjectManager(false)}>
             <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -201,7 +225,7 @@ function App() {
           </div>
           <button className="btn-secondary" onClick={() => setShowProjectManager(true)}><FaBriefcase /> Projekte</button>
           <button className={`btn-toggle ${isEditMode ? 'active' : ''}`} onClick={() => setIsEditMode(!isEditMode)}>{isEditMode ? <FaSave /> : <FaPen />}{isEditMode ? 'Erfassung beenden' : 'Zeiten erfassen'}</button>
-          <button className="btn-refresh" onClick={() => db && refreshData(db, isEditMode)}>Refresh</button>
+          <button className="btn-refresh" onClick={() => db && refreshData(db, isEditMode, viewMode)}>Refresh</button>
         </div>
       </div>
 

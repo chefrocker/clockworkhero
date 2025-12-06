@@ -5,77 +5,48 @@ import { LogEntry, Project, ColorEntry, WorkSession, ActivitySubEvent } from '..
 
 function stringToColor(str: string) {
   let hash = 0;
-  for (let i = 0; i < str.length; i++) { 
-    hash = str.charCodeAt(i) + ((hash << 5) - hash); 
-  }
-  // HSL: Pastellfarben für den Hintergrund
+  for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
   const h = Math.abs(hash) % 360;
-  return `hsl(${h}, 70%, 85%)`; // Sehr hell für Hintergrund
+  // Helle Pastellfarben für den Hintergrund (Activity Stream)
+  return `hsl(${h}, 70%, 85%)`; 
 }
 
-// Erweiterte App-Erkennung
 function simplifyAppName(title: string): string {
   const t = title.toLowerCase();
-  
-  // Browser
+  // Mapping auf Haupt-App-Namen für besseres Gruppieren
   if (t.includes('chrome')) return 'Google Chrome';
   if (t.includes('firefox')) return 'Firefox';
   if (t.includes('edge')) return 'Edge';
-  if (t.includes('opera')) return 'Opera';
-  if (t.includes('brave')) return 'Brave';
-
-  // Dev
   if (t.includes('code') || t.includes('visual studio')) return 'VS Code';
-  if (t.includes('intellij')) return 'IntelliJ';
-  if (t.includes('terminal') || t.includes('powershell') || t.includes('cmd')) return 'Terminal';
-  if (t.includes('git')) return 'Git';
-
-  // Office
   if (t.includes('word')) return 'Word';
   if (t.includes('excel')) return 'Excel';
   if (t.includes('powerpoint')) return 'PowerPoint';
-  if (t.includes('outlook')) return 'Outlook';
-  if (t.includes('onenote')) return 'OneNote';
-  if (t.includes('teams')) return 'Microsoft Teams';
-
-  // Social / Media
   if (t.includes('spotify')) return 'Spotify';
   if (t.includes('discord')) return 'Discord';
-  if (t.includes('slack')) return 'Slack';
-  if (t.includes('whatsapp')) return 'WhatsApp';
-  if (t.includes('vlc')) return 'VLC Player';
-  if (t.includes('photoshop')) return 'Photoshop';
-
-  // System
+  if (t.includes('teams')) return 'Microsoft Teams';
   if (t.includes('explorer')) return 'Explorer';
-  if (t.includes('settings') || t.includes('einstellungen')) return 'Einstellungen';
-
+  
   // Fallback: Alles vor dem Bindestrich
   return title.split(' - ')[0].trim() || title; 
 }
 
 // --- INIT ---
-
 export async function initDatabase(): Promise<Database> {
   const db = await Database.load("sqlite:tracker.db");
-  
   await db.execute(`CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, exe_path TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS app_colors (name TEXT PRIMARY KEY, color TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, color TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS work_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, description TEXT, start_time DATETIME, end_time DATETIME)`);
-  
   try { await db.execute("ALTER TABLE logs ADD COLUMN exe_path TEXT"); } catch (e) {}
   return db;
 }
 
 // --- LOGGING ---
-
 export async function logActiveWindow(db: Database, title: string, path: string) {
   await db.execute("INSERT INTO logs (title, exe_path) VALUES ($1, $2)", [title, path]);
 }
 
 // --- PROJECTS ---
-
 export async function loadProjects(db: Database): Promise<Project[]> {
   return await db.select<Project[]>("SELECT * FROM projects");
 }
@@ -88,7 +59,6 @@ export async function deleteProject(db: Database, id: number) {
 }
 
 // --- SESSIONS ---
-
 export async function saveSession(db: Database, start: Date, end: Date, projectId: string, desc: string, existingId?: number) {
   const startIso = start.toISOString();
   const endIso = end.toISOString();
@@ -120,7 +90,6 @@ export async function deleteSession(db: Database, id: string) {
 }
 
 // --- LOAD ALL (INTELLIGENTES CLUSTERING) ---
-
 export async function loadAllEvents(db: Database, editMode: boolean): Promise<any[]> {
   const allEvents = [];
   const colorCache = new Map<string, string>();
@@ -136,11 +105,9 @@ export async function loadAllEvents(db: Database, editMode: boolean): Promise<an
   }
 
   // 1. AUTO LOGS LADEN
-  // Wir laden mehr Logs, um Lücken besser zu schließen
   const logs = await db.select<LogEntry[]>("SELECT * FROM logs ORDER BY created_at ASC LIMIT 10000");
   
   if (logs.length > 0) {
-    // Initialisierung der ersten Gruppe
     let currentGroup = {
       appName: simplifyAppName(logs[0].title),
       exePath: logs[0].exe_path,
@@ -149,9 +116,8 @@ export async function loadAllEvents(db: Database, editMode: boolean): Promise<an
       subEvents: [] as ActivitySubEvent[]
     };
     
-    // Startzeit auf Minute runden
     currentGroup.start.setSeconds(0, 0);
-    currentGroup.end = new Date(currentGroup.start.getTime() + 60000); // Min 1 Minute
+    currentGroup.end = new Date(currentGroup.start.getTime() + 60000); 
 
     currentGroup.subEvents.push({
         time: currentGroup.start.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
@@ -165,18 +131,16 @@ export async function loadAllEvents(db: Database, editMode: boolean): Promise<an
       
       const appName = simplifyAppName(log.title);
       
-      // TOLERANZ-CHECK:
-      // Ist es die gleiche App?
-      // UND: Ist die Lücke kleiner als 5 Minuten? (Toleranz für kurze Pausen/Wechsel)
+      // CLUSTERING LOGIK:
+      // Wir erlauben Lücken von bis zu 5 Minuten, solange es die gleiche App ist.
       const gapInMinutes = (logTime.getTime() - currentGroup.end.getTime()) / 60000;
       
       if (appName === currentGroup.appName && gapInMinutes <= 5) {
-        // --> ZUR GRUPPE HINZUFÜGEN
-        
-        // Ende erweitern (auf aktuelle Zeit + 1 Min)
+        // GRUPPE ERWEITERN
+        // Wir setzen das Ende auf den aktuellen Log + 1 Minute
         currentGroup.end = new Date(logTime.getTime() + 60000);
         
-        // Nur hinzufügen, wenn sich der Titel geändert hat (um Duplikate in der Liste zu vermeiden)
+        // SubEvent hinzufügen (nur wenn Titel anders, um Spam zu vermeiden)
         const lastSub = currentGroup.subEvents[currentGroup.subEvents.length - 1];
         if (lastSub.title !== log.title) {
             currentGroup.subEvents.push({
@@ -184,12 +148,11 @@ export async function loadAllEvents(db: Database, editMode: boolean): Promise<an
                 title: log.title
             });
         }
-
       } else {
-        // --> GRUPPE ABSCHLIESSEN & SPEICHERN
+        // GRUPPE ABSCHLIESSEN
         const color = await getColor(currentGroup.appName);
         
-        // Nur speichern, wenn Gruppe länger als 0 Minuten ist
+        // Nur hinzufügen, wenn Dauer > 0
         if (currentGroup.end > currentGroup.start) {
             allEvents.push({
               id: 'auto-group-' + i,
@@ -210,7 +173,7 @@ export async function loadAllEvents(db: Database, editMode: boolean): Promise<an
             });
         }
 
-        // Neue Gruppe starten
+        // NEUE GRUPPE STARTEN
         currentGroup = {
           appName: appName,
           exePath: log.exe_path,
@@ -223,8 +186,7 @@ export async function loadAllEvents(db: Database, editMode: boolean): Promise<an
         };
       }
     }
-    
-    // Letzte Gruppe nicht vergessen
+    // Letzte Gruppe
     const color = await getColor(currentGroup.appName);
     allEvents.push({
         id: 'auto-group-last',
@@ -251,7 +213,7 @@ export async function loadAllEvents(db: Database, editMode: boolean): Promise<an
   
   for (const session of sessions) {
     const project = projects.find(p => p.id === session.project_id);
-    const color = project ? project.color : '#34495e'; // Dunkles Grau als Fallback
+    const color = project ? project.color : '#34495e';
     const name = project ? project.name : 'Ohne Projekt';
 
     allEvents.push({
