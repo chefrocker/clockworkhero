@@ -1,6 +1,8 @@
 import React from 'react';
 import { FaTrash } from 'react-icons/fa';
 import { AppIcon } from './AppIcon';
+// WICHTIG: Der Import muss genau so aussehen:
+import { hexToRgba } from '../utils/imageUtils';
 
 interface Props {
   eventInfo: any;
@@ -11,58 +13,104 @@ export const EventRenderer: React.FC<Props> = ({ eventInfo, onDeleteSession }) =
   const props = eventInfo.event.extendedProps;
   const isEditMode = props.isEditMode;
 
-  // --- LAYER 1: SESSIONS (Manuell) ---
+  // --- LAYER 1: SESSIONS (Manuell - Vordergrund) ---
   if (props.type === 'manual') {
+    
+    // Nutzung der Helper-Funktion
+    const bgColor = hexToRgba(props.projectColor || '#3498db', 0.85); 
+    
     return (
-      <div className="manual-session-block" style={{ borderLeftColor: props.projectColor }}>
-        <div className="manual-session-header">
-            <span className="manual-session-title" style={{color: props.projectColor}}>
-            {props.projectName}
+      <div className="manual-session-block" style={{ 
+          backgroundColor: bgColor, 
+          borderLeft: `4px solid ${props.projectColor}`, 
+          borderRadius: '8px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+          backdropFilter: 'blur(4px)', 
+          color: 'white',
+          padding: '6px 10px',
+          overflow: 'hidden',
+          position: 'relative',
+          height: '100%',
+          transition: 'transform 0.1s'
+      }}>
+        
+        {/* Projekt Icon im Hintergrund */}
+        <div style={{
+            position: 'absolute', right: '-5px', bottom: '-5px', 
+            opacity: 0.25, transform: 'rotate(-10deg)',
+            width: '50px', height: '50px', pointerEvents: 'none',
+            display: 'flex', justifyContent: 'center', alignItems: 'center'
+        }}>
+            {props.projectIconType === 'image' ? (
+                <img src={props.projectIcon} alt="" style={{width: '100%', height: '100%', objectFit: 'contain'}} />
+            ) : (
+                <AppIcon appName={props.projectIcon || props.projectName} fallbackColor="white" className="watermark-icon" />
+            )}
+        </div>
+
+        <div className="manual-session-header" style={{position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'space-between'}}>
+            <span className="manual-session-title" style={{
+                color: 'white', fontWeight: '700', fontSize: '0.9rem',
+                textShadow: '0 1px 2px rgba(0,0,0,0.3)'
+            }}>
+                {props.projectName}
             </span>
             {isEditMode && (
                 <button 
                     className="btn-delete-session" 
+                    style={{background: 'rgba(0,0,0,0.2)', color: 'white', width: '20px', height: '20px', minWidth: '20px'}}
                     onMouseDown={(e) => { e.stopPropagation(); onDeleteSession(eventInfo.event.id); }}
                 >
-                    <FaTrash size={10} />
+                    <FaTrash size={9} />
                 </button>
             )}
         </div>
-        <div className="manual-session-desc">
+        
+        <div className="manual-session-desc" style={{
+            color: 'rgba(255,255,255,0.95)', fontSize: '0.8rem', 
+            position: 'relative', zIndex: 2, marginTop: '2px',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+        }}>
           {props.description}
         </div>
       </div>
     );
   }
 
-  // --- LAYER 2: ACTIVITY STREAM (Auto) ---
+  // --- LAYER 2: ACTIVITY STREAM (Auto - Hintergrund) ---
   const containerStyle: React.CSSProperties = {
-    backgroundColor: props.appColor,
-    opacity: isEditMode ? 0.2 : 0.9, // Im Edit Mode fast unsichtbar
+    backgroundColor: isEditMode ? 'rgba(245, 245, 245, 0.5)' : 'rgba(255, 255, 255, 0.6)',
+    borderLeft: `3px solid ${props.appColor}`,
+    opacity: isEditMode ? 0.3 : 1.0, 
     filter: isEditMode ? 'grayscale(100%)' : 'none',
     pointerEvents: isEditMode ? 'none' : 'auto', 
     transition: 'all 0.3s ease',
     zIndex: 0,
-    // Flexbox für Zentrierung
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
     height: '100%',
-    borderRadius: '6px',
-    border: '1px solid rgba(0,0,0,0.05)'
+    borderRadius: '0 4px 4px 0',
+    borderTop: '1px solid rgba(0,0,0,0.03)',
+    borderBottom: '1px solid rgba(0,0,0,0.03)',
+    borderRight: '1px solid rgba(0,0,0,0.03)',
   };
 
   return (
     <div style={containerStyle}>
-      {/* NUR ICON, KEIN TEXT */}
+      {!isEditMode && (
+        <div style={{
+            position: 'absolute', top: '2px', left: '4px', zIndex: 2,
+            fontSize: '0.7rem', fontWeight: '600', color: '#64748b',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '85%'
+        }}>
+            {props.simpleName}
+        </div>
+      )}
       <div style={{
-          background: 'rgba(255,255,255,0.5)', 
-          borderRadius: '50%', 
-          padding: '4px',
-          display: 'flex',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+          position: 'absolute', right: '5%', bottom: '5%', width: '50%', height: '70%', 
+          opacity: 0.8, display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', zIndex: 1
       }}>
-        <AppIcon path={props.exePath} fallbackColor={props.appColor} className="activity-icon" />
+        <AppIcon path={props.exePath} appName={props.simpleName} fallbackColor={props.appColor} className="watermark-icon" />
       </div>
     </div>
   );

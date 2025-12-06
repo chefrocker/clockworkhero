@@ -8,16 +8,22 @@ import { EventRenderer } from './EventRenderer';
 interface Props {
   events: any[];
   isEditMode: boolean;
-  viewMode: 'day' | 'week'; // NEU: View Mode Prop
+  viewMode: 'day' | 'week';
   onDateSelect: (info: any) => void;
-  onEventClick: (info: any) => void; // NEU: Klick Handler
+  onEventClick: (info: any) => void;
   onDeleteSession: (id: string) => void;
+  onEventDrop: (info: any) => void;
+  onEventResize: (info: any) => void;
+  scrollTime?: string; // NEU
 }
 
-export const CalendarEngine: React.FC<Props> = ({ events, isEditMode, viewMode, onDateSelect, onEventClick, onDeleteSession }) => {
+export const CalendarEngine: React.FC<Props> = ({ 
+    events, isEditMode, viewMode, onDateSelect, onEventClick, 
+    onDeleteSession, onEventDrop, onEventResize,
+    scrollTime = "08:00:00"
+}) => {
   const calendarRef = useRef<FullCalendar>(null);
 
-  // Effekt: Wenn sich viewMode ändert, Kalender umschalten
   useEffect(() => {
     if (calendarRef.current) {
       const api = calendarRef.current.getApi();
@@ -35,22 +41,26 @@ export const CalendarEngine: React.FC<Props> = ({ events, isEditMode, viewMode, 
       locale="de"
       events={events}
       nowIndicator={true}
-      scrollTime="08:00:00"
+      scrollTime={scrollTime} // Hier genutzt
       height="100%"
       
-      // Interaktion
       selectable={isEditMode}
       select={onDateSelect}
-      eventClick={onEventClick} // Klick aktivieren
-      editable={false}
+      eventClick={onEventClick}
       
-      // LAYOUT & SORTIERUNG
-      // Wir sortieren nach 'order'. Manual hat 1, Auto hat 2.
-      // FullCalendar rendert niedrigere Order zuerst (also links).
+      editable={true}
+      eventStartEditable={isEditMode}
+      eventDurationEditable={isEditMode}
+      
+      eventAllow={(dropInfo, draggedEvent) => {
+          return draggedEvent.extendedProps.type === 'manual';
+      }}
+
+      eventDrop={onEventDrop}
+      eventResize={onEventResize}
+      
       eventOrder={["extendedProps.order", "start"]} 
-      slotEventOverlap={true} // Erlaubt nebeneinander
-      
-      // Optik
+      slotEventOverlap={true}
       slotDuration="00:15:00" 
       slotLabelInterval="00:15"
       slotLabelFormat={{ hour: '2-digit', minute: '2-digit', hour12: false, meridiem: false }}

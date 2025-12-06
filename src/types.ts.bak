@@ -1,6 +1,7 @@
 export interface LogEntry {
   id: number;
   title: string;
+  exe_path?: string;
   created_at: string;
 }
 
@@ -23,7 +24,19 @@ export interface WorkSession {
   end_time: string;
 }
 
-// Das Format, das der Kalender versteht
+export interface ActivitySubEvent {
+  time: string;
+  title: string;
+}
+
+// NEU: Erweiterte Einstellungen
+export interface AppSettings {
+  workStart: string;      // "08:00"
+  workEnd: string;        // "17:00"
+  theme: string;          // "light"
+  groupingThreshold: number; // Minuten (z.B. 5 oder 15)
+}
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -32,14 +45,18 @@ export interface CalendarEvent {
   display?: string;
   backgroundColor?: string;
   extendedProps: {
-    type: 'auto' | 'manual'; // Layer Unterscheidung
+    type: 'auto' | 'manual';
+    order: number;
     fullTitle?: string;
+    exePath?: string;
     appColor?: string;
     simpleName?: string;
+    subEvents?: ActivitySubEvent[];
+    dbId?: number;
     projectId?: number | null;
     projectName?: string;
     projectColor?: string;
     description?: string;
-    isEditMode?: boolean; // Wird durchgereicht für Styling
+    isEditMode?: boolean;
   };
 }

@@ -12,19 +12,33 @@ interface Props {
   onDateSelect: (info: any) => void;
   onEventClick: (info: any) => void;
   onDeleteSession: (id: string) => void;
-  onEventDrop: (info: any) => void; // NEU: Drag & Drop Handler
-  onEventResize: (info: any) => void; // NEU: Resize Handler
+  onEventDrop: (info: any) => void;
+  onEventResize: (info: any) => void;
+  scrollTime?: string;
 }
 
-export const CalendarEngine: React.FC<Props> = ({ events, isEditMode, viewMode, onDateSelect, onEventClick, onDeleteSession, onEventDrop, onEventResize }) => {
+export const CalendarEngine: React.FC<Props> = ({ 
+    events, isEditMode, viewMode, onDateSelect, onEventClick, 
+    onDeleteSession, onEventDrop, onEventResize,
+    scrollTime = "08:00:00"
+}) => {
   const calendarRef = useRef<FullCalendar>(null);
 
+  // FIX: Wir nutzen setTimeout, um den "flushSync" Fehler zu verhindern.
+  // Das stellt sicher, dass changeView erst ausgeführt wird, WENN React fertig gerendert hat.
   useEffect(() => {
-    if (calendarRef.current) {
-      const api = calendarRef.current.getApi();
-      if (viewMode === 'day') api.changeView('timeGridDay');
-      else api.changeView('timeGridWeek');
-    }
+    const timer = setTimeout(() => {
+        if (calendarRef.current) {
+            const api = calendarRef.current.getApi();
+            if (viewMode === 'day') {
+                api.changeView('timeGridDay');
+            } else {
+                api.changeView('timeGridWeek');
+            }
+        }
+    }, 0); // 0ms Verzögerung reicht, um aus dem Render-Zyklus auszubrechen
+
+    return () => clearTimeout(timer);
   }, [viewMode]);
 
   return (
@@ -36,29 +50,24 @@ export const CalendarEngine: React.FC<Props> = ({ events, isEditMode, viewMode, 
       locale="de"
       events={events}
       nowIndicator={true}
-      scrollTime="08:00:00"
+      scrollTime={scrollTime}
       height="100%"
       
-      // INTERAKTION
       selectable={isEditMode}
       select={onDateSelect}
       eventClick={onEventClick}
       
-      // EDITIERBARKEIT (Nur Sessions!)
-      editable={true} // Generell an, aber wir filtern unten
-      eventStartEditable={isEditMode} // Verschieben nur im Edit Mode
-      eventDurationEditable={isEditMode} // Resizen nur im Edit Mode
+      editable={true}
+      eventStartEditable={isEditMode}
+      eventDurationEditable={isEditMode}
       
-      // Verhindern, dass Auto-Events bewegt werden
       eventAllow={(dropInfo, draggedEvent) => {
           return draggedEvent.extendedProps.type === 'manual';
       }}
 
-      // Handler für Änderungen
       eventDrop={onEventDrop}
       eventResize={onEventResize}
       
-      // LAYOUT
       eventOrder={["extendedProps.order", "start"]} 
       slotEventOverlap={true}
       slotDuration="00:15:00" 

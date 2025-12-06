@@ -1,0 +1,258 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import Cropper from 'react-easy-crop';
+import { FaCog, FaSave, FaClock, FaPalette, FaDatabase, FaTrash, FaFileExport, FaBriefcase, FaPlus, FaImage, FaCheck, FaTimes } from 'react-icons/fa';
+import { AppSettings, Project } from '../types';
+import { AppIcon } from './AppIcon';
+import { getCroppedImg } from '../utils/imageUtils';
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  settings: AppSettings;
+  projects: Project[];
+  onSaveSettings: (newSettings: AppSettings) => void;
+  onUpdateProject: (id: number, name: string, color: string, icon?: string, iconType?: string) => void;
+  onDeleteProject: (id: number) => void;
+  onAddProject: (name: string, color: string, icon?: string, iconType?: string) => void;
+  onExportData: () => void;
+  onResetData: () => void;
+}
+
+export const SettingsModal: React.FC<Props> = ({ 
+    isOpen, onClose, settings, projects, 
+    onSaveSettings, onUpdateProject, onDeleteProject, onAddProject,
+    onExportData, onResetData 
+}) => {
+  
+  const [activeTab, setActiveTab] = useState<'general' | 'tracking' | 'projects' | 'data'>('general');
+  const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
+  
+  // Project State
+  const [newProjName, setNewProjName] = useState("");
+  const [newProjColor, setNewProjColor] = useState("#3498db");
+  const [newProjIcon, setNewProjIcon] = useState(""); 
+  const [newProjIconType, setNewProjIconType] = useState<'app' | 'image'>('app');
+
+  // Cropper State
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+  
+  // Context für Cropper (welches Projekt bearbeiten wir gerade?)
+  const [editingProjId, setEditingProjId] = useState<number | null>(null); // null = neues Projekt
+
+  useEffect(() => {
+    if (isOpen) setLocalSettings(settings);
+  }, [isOpen, settings]);
+
+  const onCropComplete = useCallback((croppedArea: any, croppedAreaPixels: any) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, projId: number | null) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.addEventListener('load', () => {
+        setCropImageSrc(reader.result as string);
+        setEditingProjId(projId);
+      });
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const saveCroppedImage = async () => {
+    if (cropImageSrc && croppedAreaPixels) {
+        try {
+            const croppedImageBase64 = await getCroppedImg(cropImageSrc, croppedAreaPixels);
+            
+            if (editingProjId === null) {
+                // Neues Projekt
+                setNewProjIcon(croppedImageBase64);
+                setNewProjIconType('image');
+            } else {
+                // Existierendes Projekt updaten
+                const proj = projects.find(p => p.id === editingProjId);
+                if (proj) {
+                    onUpdateProject(proj.id, proj.name, proj.color, croppedImageBase64, 'image');
+                }
+            }
+            // Reset Cropper
+            setCropImageSrc(null);
+            setZoom(1);
+        } catch (e) {
+            console.error(e);
+        }
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      
+      {/* CROPPER MODAL (Overlay über Settings) */}
+      {cropImageSrc && (
+          <div style={{
+              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 
+              zIndex: 10000, background: 'rgba(0,0,0,0.8)', display: 'flex', flexDirection: 'column'
+          }} onClick={e => e.stopPropagation()}>
+              <div style={{flex: 1, position: 'relative'}}>
+                  <Cropper
+                    image={cropImageSrc}
+                    crop={crop}
+                    zoom={zoom}
+                    aspect={1} // Quadratisch
+                    onCropChange={setCrop}
+                    onCropComplete={onCropComplete}
+                    onZoomChange={setZoom}
+                  />
+              </div>
+              <div style={{padding: '20px', background: 'white', display: 'flex', gap: '10px', justifyContent: 'center', alignItems: 'center'}}>
+                  <span style={{fontWeight: 'bold'}}>Zoom:</span>
+                  <input type="range" value={zoom} min={1} max={3} step={0.1} onChange={(e) => setZoom(Number(e.target.value))} />
+                  <button className="btn-secondary" onClick={() => setCropImageSrc(null)}><FaTimes /> Abbrechen</button>
+                  <button className="btn-save" onClick={saveCroppedImage}><FaCheck /> Bild übernehmen</button>
+              </div>
+          </div>
+      )}
+
+      <div className="modal-content" onClick={e => e.stopPropagation()} style={{width: '900px', height: '700px', display: 'flex', flexDirection: 'column'}}>
+        
+        <div className="modal-header" style={{background: '#2c3e50', padding: '20px 30px'}}>
+          <FaCog size={24} />
+          <h2 style={{margin: 0}}>Einstellungen</h2>
+        </div>
+
+        <div style={{display: 'flex', flex: 1, overflow: 'hidden'}}>
+            
+            {/* SIDEBAR */}
+            <div style={{width: '220px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', padding: '20px 0'}}>
+                <TabButton icon={<FaClock />} label="Allgemein" active={activeTab === 'general'} onClick={() => setActiveTab('general')} />
+                <TabButton icon={<FaPalette />} label="Tracking & Design" active={activeTab === 'tracking'} onClick={() => setActiveTab('tracking')} />
+                <TabButton icon={<FaBriefcase />} label="Projekte" active={activeTab === 'projects'} onClick={() => setActiveTab('projects')} />
+                <TabButton icon={<FaDatabase />} label="Daten & Export" active={activeTab === 'data'} onClick={() => setActiveTab('data')} />
+            </div>
+
+            {/* CONTENT */}
+            <div style={{flex: 1, padding: '40px', overflowY: 'auto'}}>
+                
+                {activeTab === 'general' && (
+                    <div>
+                        <h3 className="settings-h3">Arbeitszeit</h3>
+                        <div className="input-row">
+                            <div className="input-group">
+                                <label className="input-label">Startzeit</label>
+                                <input type="time" className="input-time" value={localSettings.workStart} onChange={e => setLocalSettings({...localSettings, workStart: e.target.value})} />
+                            </div>
+                            <div className="input-group">
+                                <label className="input-label">Endzeit</label>
+                                <input type="time" className="input-time" value={localSettings.workEnd} onChange={e => setLocalSettings({...localSettings, workEnd: e.target.value})} />
+                            </div>
+                        </div>
+                        <h3 className="settings-h3">Ziele</h3>
+                        <div className="input-group">
+                            <label className="input-label">Tagesziel (Stunden)</label>
+                            <input type="number" className="input-number" value={localSettings.dailyTarget} onChange={e => setLocalSettings({...localSettings, dailyTarget: parseFloat(e.target.value)})} />
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'tracking' && (
+                    <div>
+                        <h3 className="settings-h3">Activity Stream</h3>
+                        <div style={{marginBottom: '30px', background: '#f1f5f9', padding: '20px', borderRadius: '8px'}}>
+                            <label className="input-label">Gruppierung: {localSettings.groupingThreshold} Minuten</label>
+                            <input type="range" min="1" max="60" step="1" style={{width: '100%', marginTop: '10px'}} value={localSettings.groupingThreshold} onChange={e => setLocalSettings({...localSettings, groupingThreshold: parseInt(e.target.value)})} />
+                        </div>
+                        <h3 className="settings-h3">Design</h3>
+                        <div className="input-group">
+                            <label className="input-label">Theme</label>
+                            <select className="input-select" value={localSettings.theme} onChange={e => setLocalSettings({...localSettings, theme: e.target.value})}>
+                                <option value="light">Modern Light</option>
+                            </select>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'projects' && (
+                    <div>
+                        <h3 className="settings-h3">Neues Projekt</h3>
+                        <div style={{display: 'flex', gap: '10px', marginBottom: '30px', padding: '20px', background: '#f1f5f9', borderRadius: '12px', alignItems: 'flex-end'}}>
+                            <div style={{flex: 1}}>
+                                <label className="input-label">Name</label>
+                                <input className="input-text" placeholder="z.B. Kunde A" value={newProjName} onChange={e => setNewProjName(e.target.value)} />
+                            </div>
+                            <div>
+                                <label className="input-label">Farbe</label>
+                                <input type="color" value={newProjColor} onChange={e => setNewProjColor(e.target.value)} style={{height: '42px', width: '60px', border: 'none', cursor: 'pointer', borderRadius: '6px'}} />
+                            </div>
+                            <div style={{flex: 1}}>
+                                <label className="input-label">Icon (App Name)</label>
+                                <div style={{display: 'flex', gap: '5px'}}>
+                                    <input className="input-text" placeholder="z.B. Photoshop" value={newProjIconType === 'app' ? newProjIcon : ''} onChange={e => { setNewProjIcon(e.target.value); setNewProjIconType('app'); }} disabled={newProjIconType === 'image'} />
+                                    <label className="btn-secondary" style={{padding: '10px', cursor: 'pointer'}} title="Bild hochladen">
+                                        <FaImage />
+                                        <input type="file" accept="image/*" style={{display: 'none'}} onChange={e => handleFileChange(e, null)} />
+                                    </label>
+                                </div>
+                            </div>
+                            <button className="btn-save" onClick={() => { onAddProject(newProjName, newProjColor, newProjIcon, newProjIconType); setNewProjName(""); setNewProjIcon(""); }} style={{height: '42px'}}><FaPlus /> Erstellen</button>
+                        </div>
+
+                        <h3 className="settings-h3">Vorhandene Projekte</h3>
+                        <div style={{border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden'}}>
+                            {projects.map(p => (
+                                <div key={p.id} style={{display: 'flex', alignItems: 'center', padding: '15px', borderBottom: '1px solid #f1f5f9', background: 'white', gap: '15px'}}>
+                                    <div style={{width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', borderRadius: '6px'}}>
+                                        {p.iconType === 'image' ? (
+                                            <img src={p.icon} alt="" style={{width: '100%', height: '100%', objectFit: 'contain'}} />
+                                        ) : (
+                                            <AppIcon appName={p.icon || p.name} fallbackColor={p.color} />
+                                        )}
+                                    </div>
+                                    <input type="color" value={p.color} onChange={(e) => onUpdateProject(p.id, p.name, e.target.value, p.icon, p.iconType as any)} style={{width: '30px', height: '30px', border: 'none', cursor: 'pointer', borderRadius: '50%'}} />
+                                    <input className="input-text" value={p.name} onChange={(e) => onUpdateProject(p.id, e.target.value, p.color, p.icon, p.iconType as any)} style={{flex: 1}} />
+                                    <input className="input-text" style={{width: '120px'}} placeholder="App Icon..." value={p.iconType === 'app' ? (p.icon || '') : '(Bild)'} onChange={(e) => onUpdateProject(p.id, p.name, p.color, e.target.value, 'app')} />
+                                    <label style={{cursor: 'pointer', color: '#64748b'}} title="Bild ändern">
+                                        <FaImage size={18} />
+                                        <input type="file" accept="image/*" style={{display: 'none'}} onChange={e => handleFileChange(e, p.id)} />
+                                    </label>
+                                    <button onClick={() => onDeleteProject(p.id)} style={{color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', marginLeft: '10px'}}><FaTrash /></button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'data' && (
+                    <div>
+                        <h3 className="settings-h3">Daten-Export</h3>
+                        <button className="btn-secondary" onClick={onExportData} style={{width: '100%', justifyContent: 'center', padding: '20px', fontSize: '1rem'}}><FaFileExport /> Exportieren (.csv)</button>
+                        <h3 className="settings-h3" style={{marginTop: '50px', color: '#ef4444'}}>Gefahrenzone</h3>
+                        <div style={{border: '1px solid #fee2e2', background: '#fef2f2', padding: '20px', borderRadius: '8px'}}>
+                            <p className="settings-desc" style={{color: '#b91c1c'}}>Löscht alle Logs, Zeiten und Einstellungen.</p>
+                            <button onClick={() => { if(window.confirm("Wirklich ALLES löschen?")) onResetData(); }} style={{width: '100%', padding: '15px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer'}}><FaTrash /> Datenbank zurücksetzen</button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn-close" onClick={onClose}>Abbrechen</button>
+          <button className="btn-save" onClick={() => { onSaveSettings(localSettings); onClose(); }}>
+            <FaSave style={{marginRight: '5px'}}/> Einstellungen speichern
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TabButton = ({ icon, label, active, onClick }: any) => (
+    <div onClick={onClick} style={{padding: '15px 25px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', background: active ? 'white' : 'transparent', color: active ? '#2c3e50' : '#64748b', fontWeight: active ? '700' : '500', borderLeft: active ? '4px solid #3498db' : '4px solid transparent', transition: 'all 0.2s', fontSize: '0.95rem'}}>
+        {icon} {label}
+    </div>
+);

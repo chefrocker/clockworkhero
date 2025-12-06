@@ -1,19 +1,16 @@
 import Database from '@tauri-apps/plugin-sql';
-import { LogEntry, Project, ColorEntry, WorkSession, ActivitySubEvent } from '../types';
+import { LogEntry, Project, ColorEntry, WorkSession, AppSettings, ActivitySubEvent } from '../types';
 
 // --- HELPER ---
-
 function stringToColor(str: string) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
   const h = Math.abs(hash) % 360;
-  // Helle Pastellfarben für den Hintergrund (Activity Stream)
   return `hsl(${h}, 70%, 85%)`; 
 }
 
 function simplifyAppName(title: string): string {
   const t = title.toLowerCase();
-  // Mapping auf Haupt-App-Namen für besseres Gruppieren
   if (t.includes('chrome')) return 'Google Chrome';
   if (t.includes('firefox')) return 'Firefox';
   if (t.includes('edge')) return 'Edge';
@@ -25,40 +22,106 @@ function simplifyAppName(title: string): string {
   if (t.includes('discord')) return 'Discord';
   if (t.includes('teams')) return 'Microsoft Teams';
   if (t.includes('explorer')) return 'Explorer';
-  
-  // Fallback: Alles vor dem Bindestrich
   return title.split(' - ')[0].trim() || title; 
 }
 
 // --- INIT ---
 export async function initDatabase(): Promise<Database> {
   const db = await Database.load("sqlite:tracker.db");
+  
   await db.execute(`CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, exe_path TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS app_colors (name TEXT PRIMARY KEY, color TEXT)`);
-  await db.execute(`CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, color TEXT)`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, color TEXT, icon TEXT, icon_type TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS work_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, description TEXT, start_time DATETIME, end_time DATETIME)`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
+  
+  // MIGRATIONEN
   try { await db.execute("ALTER TABLE logs ADD COLUMN exe_path TEXT"); } catch (e) {}
+  try { await db.execute("ALTER TABLE projects ADD COLUMN icon TEXT"); } catch (e) {}
+  try { await db.execute("ALTER TABLE projects ADD COLUMN icon_type TEXT"); } catch (e) {}
+  
   return db;
 }
 
-// --- LOGGING ---
-export async function logActiveWindow(db: Database, title: string, path: string) {
-  await db.execute("INSERT INTO logs (title, exe_path) VALUES ($1, $2)", [title, path]);
+// --- SETTINGS ---
+const DEFAULT_SETTINGS: AppSettings = {
+  workStart: "08:00",
+  workEnd: "17:00",
+  dailyTarget: 8,
+  theme: "light",
+  groupingThreshold: 5
+};
+
+export async function loadSettings(db: Database): Promise<AppSettings> {
+  const rows = await db.select<{key: string, value: string}[]>("SELECT * FROM settings");
+  const settings = { ...DEFAULT_SETTINGS };
+  
+  rows.forEach(row => {
+    if (row.key === 'workStart') settings.workStart = row.value;
+    if (row.key === 'workEnd') settings.workEnd = row.value;
+    if (row.key === 'dailyTarget') settings.dailyTarget = parseFloat(row.value);
+    if (row.key === 'theme') settings.theme = row.value;
+    if (row.key === 'groupingThreshold') settings.groupingThreshold = parseInt(row.value);
+  });
+  return settings;
+}
+
+export async function saveSetting(db: Database, key: string, value: string) {
+  await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ($1, $2)", [key, value]);
+}
+
+// --- DATA MANAGEMENT ---
+export async function exportSessionsToCSV(db: Database): Promise<string> {
+  const sessions = await db.select<any[]>(`
+    SELECT w.id, p.name as project, w.description, w.start_time, w.end_time 
+    FROM work_sessions w 
+    LEFT JOIN projects p ON w.project_id = p.id
+    ORDER BY w.start_time DESC
+  `);
+
+  const header = "ID;Projekt;Beschreibung;Start;Ende;Dauer (Min);Stunden\n";
+  const rows = sessions.map(s => {
+    const start = new Date(s.start_time);
+    const end = new Date(s.end_time);
+    const durationMin = Math.round((end.getTime() - start.getTime()) / 60000);
+    const durationHours = (durationMin / 60).toFixed(2).replace('.', ','); // Excel Format
+    
+    const safeDesc = s.description ? `"${s.description.replace(/"/g, '""')}"` : "";
+    
+    return `${s.id};${s.project || "Ohne Projekt"};${safeDesc};${start.toLocaleString()};${end.toLocaleString()};${durationMin};${durationHours}`;
+  }).join("\n");
+
+  return header + rows;
+}
+
+export async function resetDatabase(db: Database) {
+  await db.execute("DELETE FROM logs");
+  await db.execute("DELETE FROM work_sessions");
+  await db.execute("DELETE FROM projects");
+  await db.execute("DELETE FROM app_colors");
+  await db.execute("DELETE FROM settings");
 }
 
 // --- PROJECTS ---
 export async function loadProjects(db: Database): Promise<Project[]> {
   return await db.select<Project[]>("SELECT * FROM projects");
 }
-export async function addProject(db: Database, name: string, color: string) {
-  await db.execute("INSERT INTO projects (name, color) VALUES ($1, $2)", [name, color]);
+export async function addProject(db: Database, name: string, color: string, icon?: string, iconType?: string) {
+  await db.execute("INSERT INTO projects (name, color, icon, icon_type) VALUES ($1, $2, $3, $4)", [name, color, icon || null, iconType || 'app']);
+}
+export async function updateProject(db: Database, id: number, name: string, color: string, icon?: string, iconType?: string) {
+  await db.execute("UPDATE projects SET name = $1, color = $2, icon = $3, icon_type = $4 WHERE id = $5", [name, color, icon || null, iconType || 'app', id]);
 }
 export async function deleteProject(db: Database, id: number) {
   await db.execute("DELETE FROM projects WHERE id = $1", [id]);
   await db.execute("UPDATE work_sessions SET project_id = NULL WHERE project_id = $1", [id]);
 }
 
-// --- SESSIONS ---
+// --- LOGGING & SESSIONS ---
+export async function logActiveWindow(db: Database, title: string, path: string) {
+  await db.execute("INSERT INTO logs (title, exe_path) VALUES ($1, $2)", [title, path]);
+}
+
 export async function saveSession(db: Database, start: Date, end: Date, projectId: string, desc: string, existingId?: number) {
   const startIso = start.toISOString();
   const endIso = end.toISOString();
@@ -89,8 +152,8 @@ export async function deleteSession(db: Database, id: string) {
   await db.execute("DELETE FROM work_sessions WHERE id = $1", [realId]);
 }
 
-// --- LOAD ALL (INTELLIGENTES CLUSTERING) ---
-export async function loadAllEvents(db: Database, editMode: boolean): Promise<any[]> {
+// --- LOAD ALL ---
+export async function loadAllEvents(db: Database, editMode: boolean, groupingThresholdMinutes: number): Promise<any[]> {
   const allEvents = [];
   const colorCache = new Map<string, string>();
   const colors = await db.select<ColorEntry[]>("SELECT * FROM app_colors");
@@ -104,9 +167,8 @@ export async function loadAllEvents(db: Database, editMode: boolean): Promise<an
     return c;
   }
 
-  // 1. AUTO LOGS LADEN
+  // 1. AUTO LOGS
   const logs = await db.select<LogEntry[]>("SELECT * FROM logs ORDER BY created_at ASC LIMIT 10000");
-  
   if (logs.length > 0) {
     let currentGroup = {
       appName: simplifyAppName(logs[0].title),
@@ -115,44 +177,25 @@ export async function loadAllEvents(db: Database, editMode: boolean): Promise<an
       end: new Date(logs[0].created_at.replace(" ", "T") + "Z"),
       subEvents: [] as ActivitySubEvent[]
     };
-    
     currentGroup.start.setSeconds(0, 0);
     currentGroup.end = new Date(currentGroup.start.getTime() + 60000); 
-
-    currentGroup.subEvents.push({
-        time: currentGroup.start.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
-        title: logs[0].title
-    });
+    currentGroup.subEvents.push({ time: currentGroup.start.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}), title: logs[0].title });
 
     for (let i = 1; i < logs.length; i++) {
       const log = logs[i];
       const logTime = new Date(log.created_at.replace(" ", "T") + "Z");
       logTime.setSeconds(0, 0);
-      
       const appName = simplifyAppName(log.title);
-      
-      // CLUSTERING LOGIK:
-      // Wir erlauben Lücken von bis zu 5 Minuten, solange es die gleiche App ist.
       const gapInMinutes = (logTime.getTime() - currentGroup.end.getTime()) / 60000;
       
-      if (appName === currentGroup.appName && gapInMinutes <= 5) {
-        // GRUPPE ERWEITERN
-        // Wir setzen das Ende auf den aktuellen Log + 1 Minute
+      if (appName === currentGroup.appName && gapInMinutes <= groupingThresholdMinutes) {
         currentGroup.end = new Date(logTime.getTime() + 60000);
-        
-        // SubEvent hinzufügen (nur wenn Titel anders, um Spam zu vermeiden)
         const lastSub = currentGroup.subEvents[currentGroup.subEvents.length - 1];
         if (lastSub.title !== log.title) {
-            currentGroup.subEvents.push({
-                time: logTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
-                title: log.title
-            });
+            currentGroup.subEvents.push({ time: logTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}), title: log.title });
         }
       } else {
-        // GRUPPE ABSCHLIESSEN
         const color = await getColor(currentGroup.appName);
-        
-        // Nur hinzufügen, wenn Dauer > 0
         if (currentGroup.end > currentGroup.start) {
             allEvents.push({
               id: 'auto-group-' + i,
@@ -172,21 +215,15 @@ export async function loadAllEvents(db: Database, editMode: boolean): Promise<an
               }
             });
         }
-
-        // NEUE GRUPPE STARTEN
         currentGroup = {
           appName: appName,
           exePath: log.exe_path,
           start: logTime,
           end: new Date(logTime.getTime() + 60000),
-          subEvents: [{
-              time: logTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
-              title: log.title
-          }]
+          subEvents: [{ time: logTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}), title: log.title }]
         };
       }
     }
-    // Letzte Gruppe
     const color = await getColor(currentGroup.appName);
     allEvents.push({
         id: 'auto-group-last',
@@ -210,12 +247,11 @@ export async function loadAllEvents(db: Database, editMode: boolean): Promise<an
   // 2. MANUAL SESSIONS
   const sessions = await db.select<WorkSession[]>("SELECT * FROM work_sessions");
   const projects = await loadProjects(db);
-  
   for (const session of sessions) {
     const project = projects.find(p => p.id === session.project_id);
     const color = project ? project.color : '#34495e';
     const name = project ? project.name : 'Ohne Projekt';
-
+    
     allEvents.push({
       id: 'manual-' + session.id,
       title: session.description || name,
@@ -230,10 +266,11 @@ export async function loadAllEvents(db: Database, editMode: boolean): Promise<an
         projectId: session.project_id,
         projectName: name,
         projectColor: color,
+        projectIcon: project?.icon, // NEU
+        projectIconType: project?.icon_type as 'app' | 'image', // NEU
         description: session.description
       }
     });
   }
-
   return allEvents;
 }

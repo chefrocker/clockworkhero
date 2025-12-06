@@ -1,7 +1,7 @@
 export interface LogEntry {
   id: number;
   title: string;
-  exe_path?: string; // Optional, falls noch alte Daten ohne Pfad da sind
+  exe_path?: string;
   created_at: string;
 }
 
@@ -9,6 +9,8 @@ export interface Project {
   id: number;
   name: string;
   color: string;
+  icon?: string; // NEU: Kann ein App-Name ("Code") oder Base64-Bild sein
+  iconType?: 'app' | 'image'; // NEU: Zur Unterscheidung
 }
 
 export interface ColorEntry {
@@ -24,10 +26,17 @@ export interface WorkSession {
   end_time: string;
 }
 
-// Für die Detail-Liste im Modal
 export interface ActivitySubEvent {
   time: string;
   title: string;
+}
+
+export interface AppSettings {
+  workStart: string;      // "08:00"
+  workEnd: string;        // "17:00"
+  dailyTarget: number;    // NEU: Stunden pro Tag (z.B. 8)
+  theme: string;          // "light"
+  groupingThreshold: number; 
 }
 
 export interface CalendarEvent {
@@ -41,18 +50,20 @@ export interface CalendarEvent {
     type: 'auto' | 'manual';
     order: number;
     
-    // Für Auto-Events (Gruppiert)
+    // Auto
     fullTitle?: string;
     exePath?: string;
     appColor?: string;
     simpleName?: string;
-    subEvents?: ActivitySubEvent[]; // Die Liste der Details
+    subEvents?: ActivitySubEvent[];
     
-    // Für Manual-Events
+    // Manual
     dbId?: number;
     projectId?: number | null;
     projectName?: string;
     projectColor?: string;
+    projectIcon?: string; // NEU
+    projectIconType?: 'app' | 'image'; // NEU
     description?: string;
     
     isEditMode?: boolean;
