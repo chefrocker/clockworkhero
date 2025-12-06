@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import Database from '@tauri-apps/plugin-sql';
-import { FaPen, FaSave, FaBriefcase, FaFolderPlus, FaTrash } from 'react-icons/fa';
+import { FaPen, FaSave, FaBriefcase, FaFolderPlus, FaTrash, FaCalendarDay, FaCalendarWeek } from 'react-icons/fa';
 
-// Imports der neuen Module
 import { initDatabase, logActiveWindow, loadAllEvents, loadProjects, addProject, deleteProject, saveSession, deleteSession } from './services/db';
 import { CalendarEngine } from './components/CalendarEngine';
 import { SessionModal } from './components/SessionModal';
+import { ActivityDetailModal } from './components/ActivityDetailModal'; // NEU
 import { Project } from './types';
 import './App.css';
+
+interface WindowInfo { title: String; path: String; }
 
 function App() {
   const [db, setDb] = useState<Database | null>(null);
@@ -16,19 +18,23 @@ function App() {
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   
-  // UI States
   const [isEditMode, setIsEditMode] = useState(false);
+  const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
   const [showProjectManager, setShowProjectManager] = useState(false);
   const [showSessionModal, setShowSessionModal] = useState(false);
   
-  // Temp Data für Modal
+  // NEU: State für Activity Details
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState<any>(null);
+
   const [selection, setSelection] = useState<{start: Date, end: Date} | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<number | undefined>(undefined);
+
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectColor, setNewProjectColor] = useState("#3498db");
 
   const lastSavedTitle = useRef<string>("");
 
-  // 1. INIT
   useEffect(() => {
     async function start() {
       try {
@@ -40,20 +46,20 @@ function App() {
     start();
   }, []);
 
-  // 2. TRACKING
   useEffect(() => {
     const unlistenPromise = listen('active-window-change', async (event) => {
-      const title = event.payload as string;
+      const info = event.payload as WindowInfo;
+      const title = info.title as string;
+      const path = info.path as string;
       setCurrentWindow(title);
       if (db && title !== lastSavedTitle.current && title !== "Unbekannt") {
-        await logActiveWindow(db, title);
+        await logActiveWindow(db, title, path);
         lastSavedTitle.current = title;
       }
     });
     return () => { unlistenPromise.then(unlisten => unlisten()); };
   }, [db]);
 
-  // 3. RELOAD bei Modus-Wechsel
   useEffect(() => { if (db) refreshData(db, isEditMode); }, [isEditMode]);
 
   async function refreshData(database: Database, editMode: boolean) {
@@ -63,15 +69,45 @@ function App() {
     setProjects(projs);
   }
 
-  // --- HANDLER ---
   const handleDateSelect = (info: any) => {
     setSelection({ start: info.start, end: info.end });
+    setEditingSessionId(undefined);
     setShowSessionModal(true);
   };
 
-  const handleSaveSession = async (projectId: string, desc: string) => {
-    if (db && selection) {
-      await saveSession(db, selection.start, selection.end, projectId, desc);
+  const handleEventClick = (info: any) => {
+    const props = info.event.extendedProps;
+    
+    // FALL 1: Manuelle Session -> Editieren
+    if (props.type === 'manual' && isEditMode) {
+        setSelection({ start: info.event.start, end: info.event.end });
+        setEditingSessionId(props.dbId);
+        setShowSessionModal(true);
+    }
+    
+    // FALL 2: Activity Stream -> Details anzeigen (Nur im Analyse Modus)
+    if (props.type === 'auto' && !isEditMode) {
+        setSelectedActivity({
+            title: props.simpleName,
+            exePath: props.exePath,
+            color: props.appColor,
+            subEvents: props.subEvents || []
+        });
+        setShowActivityModal(true);
+    }
+  };
+
+  const handleEventChange = async (info: any) => {
+      const props = info.event.extendedProps;
+      if (db && props.type === 'manual') {
+          await saveSession(db, info.event.start, info.event.end, props.projectId, props.description, props.dbId);
+          refreshData(db, isEditMode);
+      }
+  };
+
+  const handleSaveSession = async (projectId: string, desc: string, start: Date, end: Date) => {
+    if (db) {
+      await saveSession(db, start, end, projectId, desc, editingSessionId);
       setShowSessionModal(false);
       refreshData(db, isEditMode);
     }
@@ -102,6 +138,7 @@ function App() {
   return (
     <div className="app-container">
       
+      {/* MODAL: ARBEITSZEIT */}
       <SessionModal 
         isOpen={showSessionModal}
         onClose={() => setShowSessionModal(false)}
@@ -111,7 +148,17 @@ function App() {
         projects={projects}
       />
 
-      {/* PROJEKT MANAGER (Inline Modal für Einfachheit hier gelassen, könnte auch ausgelagert werden) */}
+      {/* MODAL: ACTIVITY DETAILS (NEU) */}
+      <ActivityDetailModal 
+        isOpen={showActivityModal}
+        onClose={() => setShowActivityModal(false)}
+        title={selectedActivity?.title || ''}
+        exePath={selectedActivity?.exePath}
+        color={selectedActivity?.color || '#ccc'}
+        subEvents={selectedActivity?.subEvents || []}
+      />
+
+      {/* MODAL: PROJEKTE */}
       {showProjectManager && (
         <div className="modal-overlay" onClick={() => setShowProjectManager(false)}>
             <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -142,36 +189,32 @@ function App() {
         </div>
       )}
 
-      {/* HEADER */}
       <div className="app-header">
         <div className="header-status">
           <span className={`status-dot ${isEditMode ? 'active' : ''}`}></span>
           {isEditMode ? 'Modus: Erfassung' : 'Modus: Analyse'}
         </div>
         <div className="header-controls">
-          <button className="btn-secondary" onClick={() => setShowProjectManager(true)}>
-            <FaBriefcase /> Projekte
-          </button>
-          <button 
-            className={`btn-toggle ${isEditMode ? 'active' : ''}`}
-            onClick={() => setIsEditMode(!isEditMode)}
-          >
-            {isEditMode ? <FaSave /> : <FaPen />}
-            {isEditMode ? 'Erfassung beenden' : 'Zeiten erfassen'}
-          </button>
-          <button className="btn-refresh" onClick={() => db && refreshData(db, isEditMode)}>
-            Refresh
-          </button>
+          <div style={{display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '2px', marginRight: '10px'}}>
+              <button onClick={() => setViewMode('day')} style={{background: viewMode === 'day' ? 'white' : 'transparent', boxShadow: viewMode === 'day' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: '#334155'}}><FaCalendarDay /> Tag</button>
+              <button onClick={() => setViewMode('week')} style={{background: viewMode === 'week' ? 'white' : 'transparent', boxShadow: viewMode === 'week' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: '#334155'}}><FaCalendarWeek /> Woche</button>
+          </div>
+          <button className="btn-secondary" onClick={() => setShowProjectManager(true)}><FaBriefcase /> Projekte</button>
+          <button className={`btn-toggle ${isEditMode ? 'active' : ''}`} onClick={() => setIsEditMode(!isEditMode)}>{isEditMode ? <FaSave /> : <FaPen />}{isEditMode ? 'Erfassung beenden' : 'Zeiten erfassen'}</button>
+          <button className="btn-refresh" onClick={() => db && refreshData(db, isEditMode)}>Refresh</button>
         </div>
       </div>
 
-      {/* KALENDER */}
       <div className="calendar-wrapper">
         <CalendarEngine 
           events={calendarEvents}
           isEditMode={isEditMode}
+          viewMode={viewMode}
           onDateSelect={handleDateSelect}
+          onEventClick={handleEventClick}
           onDeleteSession={handleDeleteSession}
+          onEventDrop={handleEventChange}
+          onEventResize={handleEventChange}
         />
       </div>
     </div>

@@ -1,6 +1,7 @@
 export interface LogEntry {
   id: number;
   title: string;
+  exe_path?: string; // Optional, falls noch alte Daten ohne Pfad da sind
   created_at: string;
 }
 
@@ -23,7 +24,12 @@ export interface WorkSession {
   end_time: string;
 }
 
-// Das Format, das der Kalender versteht
+// Für die Detail-Liste im Modal
+export interface ActivitySubEvent {
+  time: string;
+  title: string;
+}
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -32,14 +38,23 @@ export interface CalendarEvent {
   display?: string;
   backgroundColor?: string;
   extendedProps: {
-    type: 'auto' | 'manual'; // Layer Unterscheidung
+    type: 'auto' | 'manual';
+    order: number;
+    
+    // Für Auto-Events (Gruppiert)
     fullTitle?: string;
+    exePath?: string;
     appColor?: string;
     simpleName?: string;
+    subEvents?: ActivitySubEvent[]; // Die Liste der Details
+    
+    // Für Manual-Events
+    dbId?: number;
     projectId?: number | null;
     projectName?: string;
     projectColor?: string;
     description?: string;
-    isEditMode?: boolean; // Wird durchgereicht für Styling
+    
+    isEditMode?: boolean;
   };
 }

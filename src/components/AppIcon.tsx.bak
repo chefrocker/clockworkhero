@@ -1,0 +1,60 @@
+import React from 'react';
+import { 
+    FaChrome, FaFirefox, FaEdge, FaOpera, 
+    FaWindows, FaApple, FaLinux, 
+    FaSpotify, FaDiscord, FaSlack, FaWhatsapp, 
+    FaFileWord, FaFileExcel, FaFilePowerpoint, FaFilePdf, 
+    FaCode, FaTerminal, FaGitAlt, FaFolderOpen, FaCog
+} from 'react-icons/fa';
+import { VscCode, VscTerminal } from 'react-icons/vsc';
+import { SiMicrosoftteams, SiAdobephotoshop, SiIntellijidea, SiVlc } from 'react-icons/si';
+
+interface Props {
+  path?: string; // Wird aktuell nicht genutzt, da wir auf Namen mappen
+  fallbackColor: string;
+  className?: string;
+}
+
+export const AppIcon: React.FC<Props> = ({ path, fallbackColor, className }) => {
+  // Wir nutzen den Pfad oder Namen, um das Icon zu bestimmen.
+  // Da wir im Renderer "simpleName" haben, nutzen wir hier eine Mapping-Logik.
+  // Der "path" Prop enthält hier oft den Namen oder Pfad.
+  
+  const name = path ? path.toLowerCase() : '';
+
+  const iconStyle = { width: '20px', height: '20px', color: '#555' };
+
+  // Browser
+  if (name.includes('chrome')) return <FaChrome style={{...iconStyle, color: '#f1c40f'}} className={className} />;
+  if (name.includes('firefox')) return <FaFirefox style={{...iconStyle, color: '#e67e22'}} className={className} />;
+  if (name.includes('edge')) return <FaEdge style={{...iconStyle, color: '#3498db'}} className={className} />;
+  if (name.includes('opera')) return <FaOpera style={{...iconStyle, color: '#e74c3c'}} className={className} />;
+
+  // Dev
+  if (name.includes('code') || name.includes('visual studio')) return <VscCode style={{...iconStyle, color: '#007acc'}} className={className} />;
+  if (name.includes('intellij')) return <SiIntellijidea style={{...iconStyle, color: '#ff318c'}} className={className} />;
+  if (name.includes('terminal') || name.includes('powershell') || name.includes('cmd')) return <VscTerminal style={{...iconStyle, color: '#333'}} className={className} />;
+  if (name.includes('git')) return <FaGitAlt style={{...iconStyle, color: '#f1502f'}} className={className} />;
+
+  // Office
+  if (name.includes('word')) return <FaFileWord style={{...iconStyle, color: '#2b579a'}} className={className} />;
+  if (name.includes('excel')) return <FaFileExcel style={{...iconStyle, color: '#217346'}} className={className} />;
+  if (name.includes('powerpoint')) return <FaFilePowerpoint style={{...iconStyle, color: '#d24726'}} className={className} />;
+  if (name.includes('teams')) return <SiMicrosoftteams style={{...iconStyle, color: '#6264a7'}} className={className} />;
+  if (name.includes('pdf') || name.includes('acrobat')) return <FaFilePdf style={{...iconStyle, color: '#e74c3c'}} className={className} />;
+
+  // Social / Media
+  if (name.includes('spotify')) return <FaSpotify style={{...iconStyle, color: '#1db954'}} className={className} />;
+  if (name.includes('discord')) return <FaDiscord style={{...iconStyle, color: '#5865f2'}} className={className} />;
+  if (name.includes('slack')) return <FaSlack style={{...iconStyle, color: '#4a154b'}} className={className} />;
+  if (name.includes('whatsapp')) return <FaWhatsapp style={{...iconStyle, color: '#25d366'}} className={className} />;
+  if (name.includes('photoshop')) return <SiAdobephotoshop style={{...iconStyle, color: '#31a8ff'}} className={className} />;
+  if (name.includes('vlc')) return <SiVlc style={{...iconStyle, color: '#e67e22'}} className={className} />;
+
+  // System
+  if (name.includes('explorer')) return <FaFolderOpen style={{...iconStyle, color: '#f39c12'}} className={className} />;
+  if (name.includes('settings') || name.includes('einstellungen')) return <FaCog style={{...iconStyle, color: '#7f8c8d'}} className={className} />;
+
+  // Fallback: Windows Logo in der App-Farbe
+  return <FaWindows style={{...iconStyle, color: '#7f8c8d'}} className={className} />;
+};

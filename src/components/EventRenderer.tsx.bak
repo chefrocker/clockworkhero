@@ -38,31 +38,28 @@ export const EventRenderer: React.FC<Props> = ({ eventInfo, onDeleteSession }) =
   // --- LAYER 2: ACTIVITY STREAM (Auto) ---
   const containerStyle: React.CSSProperties = {
     backgroundColor: props.appColor,
-    opacity: isEditMode ? 0.2 : 0.9, // Im Edit Mode fast unsichtbar
-    filter: isEditMode ? 'grayscale(100%)' : 'none',
+    opacity: isEditMode ? 0.2 : 1.0, // Sehr blass im Edit Mode
+    filter: isEditMode ? 'grayscale(80%)' : 'none',
     pointerEvents: isEditMode ? 'none' : 'auto', 
     transition: 'all 0.3s ease',
     zIndex: 0,
-    // Flexbox für Zentrierung
+    // Zentrierung für das Icon
     display: 'flex',
     justifyContent: 'center',
-    alignItems: 'center',
-    height: '100%',
-    borderRadius: '6px',
-    border: '1px solid rgba(0,0,0,0.05)'
+    alignItems: 'center'
   };
 
   return (
-    <div style={containerStyle}>
-      {/* NUR ICON, KEIN TEXT */}
+    <div className="app-block" style={containerStyle}>
+      {/* NUR ICON ANZEIGEN */}
       <div style={{
-          background: 'rgba(255,255,255,0.5)', 
+          background: 'rgba(255,255,255,0.2)', 
           borderRadius: '50%', 
-          padding: '4px',
+          padding: '6px',
           display: 'flex',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
       }}>
-        <AppIcon path={props.exePath} fallbackColor={props.appColor} className="activity-icon" />
+        <AppIcon path={props.exePath} fallbackColor={props.appColor} />
       </div>
     </div>
   );

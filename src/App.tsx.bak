@@ -1,361 +1,160 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import Database from '@tauri-apps/plugin-sql'; 
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin from '@fullcalendar/interaction';
+import Database from '@tauri-apps/plugin-sql';
+import { FaPen, FaSave, FaBriefcase, FaFolderPlus, FaTrash, FaCalendarDay, FaCalendarWeek } from 'react-icons/fa';
 
-// Icons
-import { FaChrome, FaFirefox, FaEdge, FaTerminal, FaFileWord, FaFileExcel, FaCode, FaWindows, FaSpotify, FaDiscord, FaBriefcase, FaFolderPlus, FaTrash, FaSave, FaPen, FaClock } from 'react-icons/fa';
-import { VscCode } from 'react-icons/vsc';
-
+import { initDatabase, logActiveWindow, loadAllEvents, loadProjects, addProject, deleteProject, saveSession, deleteSession } from './services/db';
+import { CalendarEngine } from './components/CalendarEngine';
+import { SessionModal } from './components/SessionModal';
+import { Project } from './types';
 import './App.css';
 
-// --- TYPEN ---
-interface LogEntry { id: number; title: string; created_at: string; }
-interface Project { id: number; name: string; color: string; }
-interface ColorEntry { name: string; color: string; }
-// NEU: Manuelle Arbeitszeit
-interface WorkSession { id: number; project_id: number | null; description: string; start_time: string; end_time: string; }
+// Interface für das Event aus Rust
+interface WindowInfo {
+    title: String;
+    path: String;
+}
 
 function App() {
-  const [currentWindow, setCurrentWindow] = useState("Warte auf Tracking...");
   const [db, setDb] = useState<Database | null>(null);
-  
-  // Events für den Kalender (gemischt: Auto + Manuell)
+  const [currentWindow, setCurrentWindow] = useState("Warte auf Tracking...");
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
-  
-  // MODUS: false = Analyse (Auto groß), true = Erfassung (Auto klein, Manuell bearbeitbar)
-  const [isEditMode, setIsEditMode] = useState(false);
-
-  // Modals
-  const [selectedEvent, setSelectedEvent] = useState<any | null>(null); // Für Auto-Logs Details
-  const [showProjectManager, setShowProjectManager] = useState(false);
-  const [showSessionModal, setShowSessionModal] = useState(false); // NEU: Für manuelle Einträge
-
-  // Daten für neuen manuellen Eintrag
-  const [newSessionStart, setNewSessionStart] = useState<Date | null>(null);
-  const [newSessionEnd, setNewSessionEnd] = useState<Date | null>(null);
-  const [newSessionProjectId, setNewSessionProjectId] = useState<string>("");
-  const [newSessionDesc, setNewSessionDesc] = useState("");
-
-  // Stammdaten
   const [projects, setProjects] = useState<Project[]>([]);
+  
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
+  const [showProjectManager, setShowProjectManager] = useState(false);
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  
+  const [selection, setSelection] = useState<{start: Date, end: Date} | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<number | undefined>(undefined);
+
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectColor, setNewProjectColor] = useState("#3498db");
 
   const lastSavedTitle = useRef<string>("");
-  const colorCache = useRef<Map<string, string>>(new Map());
 
-  // --- 1. DB INIT ---
   useEffect(() => {
-    async function initDb() {
+    async function start() {
       try {
-        const database = await Database.load("sqlite:tracker.db");
-        
-        await database.execute(`CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
-        await database.execute(`CREATE TABLE IF NOT EXISTS app_colors (name TEXT PRIMARY KEY, color TEXT)`);
-        await database.execute(`CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, color TEXT)`);
-        
-        // NEU: Tabelle für manuelle Arbeitszeiten
-        await database.execute(`
-            CREATE TABLE IF NOT EXISTS work_sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                project_id INTEGER, 
-                description TEXT, 
-                start_time DATETIME, 
-                end_time DATETIME
-            )
-        `);
-
+        const database = await initDatabase();
         setDb(database);
-        await loadColorsIntoCache(database);
-        await loadProjects(database);
-        loadData(database, isEditMode);
-      } catch (e) {
-        console.error("Init Error:", e);
-      }
+        refreshData(database, isEditMode);
+      } catch (e) { console.error(e); }
     }
-    initDb();
+    start();
   }, []);
 
-  // --- 2. TRACKING (Hintergrund) ---
   useEffect(() => {
+    // Event Payload ist jetzt ein Objekt {title, path}
     const unlistenPromise = listen('active-window-change', async (event) => {
-      const newTitle = event.payload as string;
-      setCurrentWindow(newTitle);
-      if (db && newTitle !== lastSavedTitle.current && newTitle !== "Unbekannt") {
-        try {
-          await db.execute("INSERT INTO logs (title) VALUES ($1)", [newTitle]);
-          lastSavedTitle.current = newTitle;
-        } catch (e) {}
+      const info = event.payload as WindowInfo; // Typ Cast
+      const title = info.title as string;
+      const path = info.path as string;
+
+      setCurrentWindow(title);
+      if (db && title !== lastSavedTitle.current && title !== "Unbekannt") {
+        await logActiveWindow(db, title, path); // Pfad mitgeben!
+        lastSavedTitle.current = title;
       }
     });
     return () => { unlistenPromise.then(unlisten => unlisten()); };
   }, [db]);
 
-  // Reload bei Modus-Wechsel
-  useEffect(() => { if (db) loadData(db, isEditMode); }, [isEditMode]);
+  useEffect(() => { if (db) refreshData(db, isEditMode); }, [isEditMode]);
 
-  // --- DATEN LADEN (AUTO + MANUELL) ---
-  async function loadData(database: Database, editMode: boolean) {
-    if (!database) return;
-    try {
-      const allEvents = [];
-
-      // 1. AUTOMATISCHE LOGS LADEN
-      const logs = await database.select<LogEntry[]>("SELECT * FROM logs ORDER BY created_at ASC LIMIT 3000");
-      for (let i = 0; i < logs.length; i++) {
-        const current = logs[i];
-        const next = logs[i + 1];
-        const start = new Date(current.created_at.replace(" ", "T") + "Z");
-        start.setSeconds(0, 0);
-        let end = next ? new Date(next.created_at.replace(" ", "T") + "Z") : new Date(start.getTime() + 60000);
-        end.setSeconds(0, 0);
-        if (start.getTime() === end.getTime()) end = new Date(start.getTime() + 60000);
-
-        const simpleName = simplifyAppName(current.title);
-        const color = await getOrGenerateColor(database, simpleName);
-
-        allEvents.push({
-          id: 'auto-' + current.id,
-          title: current.title,
-          start: start,
-          end: end,
-          // WICHTIG: Im Edit-Mode sind Auto-Logs nur Hintergrund!
-          display: editMode ? 'background' : 'block', 
-          backgroundColor: color,
-          extendedProps: {
-            type: 'auto', // Markierung
-            fullTitle: current.title,
-            appColor: color,
-            simpleName: simpleName,
-            isEditMode: editMode
-          }
-        });
-      }
-
-      // 2. MANUELLE SESSIONS LADEN
-      const sessions = await database.select<WorkSession[]>("SELECT * FROM work_sessions");
-      for (const session of sessions) {
-          const project = projects.find(p => p.id === session.project_id);
-          const color = project ? project.color : '#34495e';
-          const name = project ? project.name : 'Ohne Projekt';
-
-          allEvents.push({
-              id: 'manual-' + session.id,
-              title: session.description || name,
-              start: new Date(session.start_time),
-              end: new Date(session.end_time),
-              display: 'block', // Manuelle sind IMMER Blöcke
-              backgroundColor: 'transparent', // Wir regeln das Styling selbst
-              extendedProps: {
-                  type: 'manual', // Markierung
-                  projectId: session.project_id,
-                  projectName: name,
-                  projectColor: color,
-                  description: session.description
-              }
-          });
-      }
-
-      setCalendarEvents(allEvents);
-    } catch (e) {
-      console.error("Load Error:", e);
-    }
+  async function refreshData(database: Database, editMode: boolean) {
+    const events = await loadAllEvents(database, editMode);
+    const projs = await loadProjects(database);
+    setCalendarEvents(events);
+    setProjects(projs);
   }
 
-  // --- INTERAKTION: NEUE SESSION ERSTELLEN ---
-  const handleDateSelect = (selectInfo: any) => {
-      // Nur im Edit-Modus erlauben wir das Erstellen
-      if (!isEditMode) return;
-
-      setNewSessionStart(selectInfo.start);
-      setNewSessionEnd(selectInfo.end);
-      setNewSessionProjectId("");
-      setNewSessionDesc("");
-      setShowSessionModal(true);
+  const handleDateSelect = (info: any) => {
+    setSelection({ start: info.start, end: info.end });
+    setEditingSessionId(undefined);
+    setShowSessionModal(true);
   };
 
-  async function saveSession() {
-      if (!db || !newSessionStart || !newSessionEnd) return;
-      
-      // Zeit formatieren für SQLite (YYYY-MM-DD HH:MM:SS)
-      // Trick: toISOString() gibt UTC, wir wollen aber Lokale Zeit speichern oder konsistent bleiben.
-      // Am einfachsten: Wir speichern ISO Strings.
-      
-      await db.execute(
-          "INSERT INTO work_sessions (project_id, description, start_time, end_time) VALUES ($1, $2, $3, $4)",
-          [
-              newSessionProjectId ? parseInt(newSessionProjectId) : null,
-              newSessionDesc,
-              newSessionStart.toISOString(),
-              newSessionEnd.toISOString()
-          ]
-      );
-      
-      setShowSessionModal(false);
-      loadData(db, isEditMode);
-  }
-
-  async function deleteSession(id: string) {
-      if(!db) return;
-      const realId = id.replace('manual-', '');
-      await db.execute("DELETE FROM work_sessions WHERE id = $1", [realId]);
-      loadData(db, isEditMode);
-  }
-
-  // --- PROJEKT LOGIK ---
-  async function loadProjects(database: Database) {
-      const rows = await database.select<Project[]>("SELECT * FROM projects");
-      setProjects(rows);
-  }
-  async function addProject() {
-      if (!db || !newProjectName) return;
-      await db.execute("INSERT INTO projects (name, color) VALUES ($1, $2)", [newProjectName, newProjectColor]);
-      setNewProjectName("");
-      await loadProjects(db);
-  }
-  async function deleteProject(id: number) {
-      if (!db) return;
-      await db.execute("DELETE FROM projects WHERE id = $1", [id]);
-      await loadProjects(db);
-  }
-
-  // --- HELPER ---
-  async function loadColorsIntoCache(database: Database) {
-    const rows = await database.select<ColorEntry[]>("SELECT * FROM app_colors");
-    rows.forEach(r => colorCache.current.set(r.name, r.color));
-  }
-  async function getOrGenerateColor(database: Database, appName: string): Promise<string> {
-    if (colorCache.current.has(appName)) return colorCache.current.get(appName)!;
-    const newColor = stringToColor(appName);
-    try { await database.execute("INSERT INTO app_colors (name, color) VALUES ($1, $2)", [appName, newColor]); colorCache.current.set(appName, newColor); } catch (e) {}
-    return newColor;
-  }
-  function simplifyAppName(title: string): string {
-    const t = title.toLowerCase();
-    if (t.includes('chrome')) return 'Google Chrome';
-    if (t.includes('code')) return 'VS Code';
-    if (t.includes('word')) return 'Word';
-    return title.split(' - ')[0] || title; 
-  }
-  function stringToColor(str: string) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
-    const h = Math.abs(hash) % 360;
-    return `hsl(${h}, 70%, 45%)`; 
-  }
-
-  // --- RENDERER ---
-  const renderEventContent = (eventInfo: any) => {
-    const props = eventInfo.event.extendedProps;
-    
-    // FALL 1: Manuelle Arbeitszeit (Vordergrund)
-    if (props.type === 'manual') {
-        return (
-            <div className="manual-session-block" style={{ borderLeftColor: props.projectColor }}>
-                <div className="manual-session-title" style={{color: props.projectColor}}>
-                    {props.projectName}
-                </div>
-                <div style={{fontSize: '0.85rem', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis'}}>
-                    {props.description}
-                </div>
-                {/* Löschen Button (nur im Edit Mode sichtbar via CSS Hover) */}
-                {isEditMode && (
-                    <button 
-                        className="btn-delete-session" 
-                        onClick={(e) => { e.stopPropagation(); deleteSession(eventInfo.event.id); }}
-                    >
-                        <FaTrash size={10} />
-                    </button>
-                )}
-            </div>
-        );
+  const handleEventClick = (info: any) => {
+    const props = info.event.extendedProps;
+    if (props.type === 'manual' && isEditMode) {
+        setSelection({ start: info.event.start, end: info.event.end });
+        setEditingSessionId(props.dbId);
+        setShowSessionModal(true);
     }
+  };
 
-    // FALL 2: Automatisches Tracking (Hintergrund oder Block)
-    // Wenn EditMode an ist, sind diese Events "background" events, FullCalendar rendert die anders (ohne Inhalt).
-    // Wenn EditMode aus ist, rendern wir sie als schöne Blöcke.
-    
-    if (props.isEditMode) return null; // Im Hintergrund-Modus rendert FullCalendar nur die Farbe
+  // NEU: Handler für Drag & Drop (Verschieben/Verlängern)
+  const handleEventChange = async (info: any) => {
+      const props = info.event.extendedProps;
+      if (db && props.type === 'manual') {
+          // Wir nutzen saveSession, das kümmert sich um Konflikte
+          await saveSession(
+              db, 
+              info.event.start, 
+              info.event.end, 
+              props.projectId, 
+              props.description, 
+              props.dbId
+          );
+          refreshData(db, isEditMode);
+      }
+  };
 
-    return (
-      <div className="app-block" style={{ backgroundColor: props.appColor }}>
-        <div className="block-title">{props.simpleName}</div>
-      </div>
-    );
+  const handleSaveSession = async (projectId: string, desc: string, start: Date, end: Date) => {
+    if (db) {
+      await saveSession(db, start, end, projectId, desc, editingSessionId);
+      setShowSessionModal(false);
+      refreshData(db, isEditMode);
+    }
+  };
+
+  const handleDeleteSession = async (id: string) => {
+    if (db) {
+      await deleteSession(db, id);
+      refreshData(db, isEditMode);
+    }
+  };
+
+  const handleAddProject = async () => {
+    if (db && newProjectName) {
+      await addProject(db, newProjectName, newProjectColor);
+      setNewProjectName("");
+      refreshData(db, isEditMode);
+    }
+  };
+
+  const handleDeleteProject = async (id: number) => {
+    if (db) {
+      await deleteProject(db, id);
+      refreshData(db, isEditMode);
+    }
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      
-      {/* --- MODAL: NEUE ARBEITSZEIT --- */}
-      {showSessionModal && (
-          <div className="modal-overlay" onClick={() => setShowSessionModal(false)}>
-              <div className="modal-content" onClick={e => e.stopPropagation()}>
-                  <div className="modal-header" style={{background: '#27ae60'}}>
-                      <FaClock size={30} />
-                      <h2>Arbeitszeit erfassen</h2>
-                  </div>
-                  <div className="modal-body">
-                      <div className="modal-row">
-                          <span className="modal-label">Zeitraum:</span>
-                          <span className="modal-value">
-                              {newSessionStart?.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - {newSessionEnd?.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                          </span>
-                      </div>
-                      <div className="modal-row">
-                          <span className="modal-label">Dauer:</span>
-                          <span className="modal-value">
-                              {newSessionStart && newSessionEnd ? Math.round((newSessionEnd.getTime() - newSessionStart.getTime()) / 60000) : 0} Min.
-                          </span>
-                      </div>
-                      
-                      <div style={{marginTop: '20px'}}>
-                          <label style={{display: 'block', fontWeight: 'bold', marginBottom: '5px', color: '#7f8c8d'}}>Projekt:</label>
-                          <select 
-                            style={{width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '1rem'}}
-                            value={newSessionProjectId}
-                            onChange={e => setNewSessionProjectId(e.target.value)}
-                          >
-                              <option value="">-- Bitte wählen --</option>
-                              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                          </select>
-                      </div>
+    <div className="app-container">
+      <SessionModal 
+        isOpen={showSessionModal}
+        onClose={() => setShowSessionModal(false)}
+        onSave={handleSaveSession}
+        start={selection?.start || null}
+        end={selection?.end || null}
+        projects={projects}
+      />
 
-                      <div style={{marginTop: '15px'}}>
-                          <label style={{display: 'block', fontWeight: 'bold', marginBottom: '5px', color: '#7f8c8d'}}>Beschreibung:</label>
-                          <input 
-                            style={{width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '1rem'}}
-                            placeholder="Was hast du gemacht?"
-                            value={newSessionDesc}
-                            onChange={e => setNewSessionDesc(e.target.value)}
-                          />
-                      </div>
-                  </div>
-                  <div className="modal-footer">
-                      <button className="btn-close" onClick={() => setShowSessionModal(false)}>Abbrechen</button>
-                      <button className="btn-save" onClick={saveSession} style={{marginLeft: '10px'}}>Speichern</button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* --- MODAL: PROJEKTE --- */}
       {showProjectManager && (
         <div className="modal-overlay" onClick={() => setShowProjectManager(false)}>
             <div className="modal-content" onClick={e => e.stopPropagation()}>
                 <div className="modal-header" style={{background: '#2c3e50'}}>
-                    <FaBriefcase size={30} />
+                    <FaBriefcase size={24} />
                     <h2>Projekte</h2>
                 </div>
                 <div className="modal-body">
                     <div style={{display: 'flex', gap: '10px', marginBottom: '15px'}}>
-                        <input className="input-field" placeholder="Neues Projekt..." value={newProjectName} onChange={e => setNewProjectName(e.target.value)} style={{flex: 1, padding: '10px'}} />
+                        <input className="input-text" placeholder="Projektname" value={newProjectName} onChange={e => setNewProjectName(e.target.value)} />
                         <input type="color" value={newProjectColor} onChange={e => setNewProjectColor(e.target.value)} style={{height: '40px', width: '50px', border: 'none', cursor: 'pointer'}} />
-                        <button onClick={addProject} style={{background: '#27ae60', color: 'white', border: 'none', borderRadius: '6px', width: '40px', cursor: 'pointer'}}><FaFolderPlus /></button>
+                        <button className="btn-save" onClick={handleAddProject} style={{width: 'auto', padding: '0 15px'}}><FaFolderPlus /></button>
                     </div>
                     <div style={{maxHeight: '300px', overflowY: 'auto'}}>
                         {projects.map(p => (
@@ -364,7 +163,7 @@ function App() {
                                     <div style={{width: '15px', height: '15px', borderRadius: '50%', background: p.color}}></div>
                                     <strong>{p.name}</strong>
                                 </div>
-                                <button onClick={() => deleteProject(p.id)} style={{background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer'}}><FaTrash /></button>
+                                <button onClick={() => handleDeleteProject(p.id)} style={{background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer'}}><FaTrash /></button>
                             </div>
                         ))}
                     </div>
@@ -374,64 +173,32 @@ function App() {
         </div>
       )}
 
-      {/* HEADER */}
-      <div style={{ background: 'white', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', zIndex: 100 }}>
-        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#2c3e50', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{background: isEditMode ? '#27ae60' : '#e74c3c', width: '12px', height: '12px', borderRadius: '50%'}}></span>
+      <div className="app-header">
+        <div className="header-status">
+          <span className={`status-dot ${isEditMode ? 'active' : ''}`}></span>
           {isEditMode ? 'Modus: Erfassung' : 'Modus: Analyse'}
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button onClick={() => setShowProjectManager(true)} style={{ padding: '10px 20px', cursor: 'pointer', background: '#34495e', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <FaBriefcase /> Projekte
-          </button>
-          
-          {/* DER WICHTIGE TOGGLE BUTTON */}
-          <button 
-            onClick={() => setIsEditMode(!isEditMode)}
-            style={{ 
-                padding: '10px 20px', cursor: 'pointer', 
-                background: isEditMode ? '#27ae60' : '#95a5a6', 
-                color: 'white',
-                border: 'none', borderRadius: '8px', fontWeight: '600',
-                display: 'flex', alignItems: 'center', gap: '5px'
-            }}
-          >
-            {isEditMode ? <FaSave /> : <FaPen />}
-            {isEditMode ? 'Erfassung beenden' : 'Zeiten erfassen'}
-          </button>
-
-          <button onClick={() => db && loadData(db, isEditMode)} style={{ padding: '10px 20px', cursor: 'pointer', background: '#ecf0f1', color: '#2c3e50', border: 'none', borderRadius: '8px', fontWeight: '600' }}>
-            Refresh
-          </button>
+        <div className="header-controls">
+          <div style={{display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '2px', marginRight: '10px'}}>
+              <button onClick={() => setViewMode('day')} style={{background: viewMode === 'day' ? 'white' : 'transparent', boxShadow: viewMode === 'day' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: '#334155'}}><FaCalendarDay /> Tag</button>
+              <button onClick={() => setViewMode('week')} style={{background: viewMode === 'week' ? 'white' : 'transparent', boxShadow: viewMode === 'week' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: '#334155'}}><FaCalendarWeek /> Woche</button>
+          </div>
+          <button className="btn-secondary" onClick={() => setShowProjectManager(true)}><FaBriefcase /> Projekte</button>
+          <button className={`btn-toggle ${isEditMode ? 'active' : ''}`} onClick={() => setIsEditMode(!isEditMode)}>{isEditMode ? <FaSave /> : <FaPen />}{isEditMode ? 'Erfassung beenden' : 'Zeiten erfassen'}</button>
+          <button className="btn-refresh" onClick={() => db && refreshData(db, isEditMode)}>Refresh</button>
         </div>
       </div>
 
-      {/* KALENDER */}
-      <div style={{ flex: 1, padding: '0', boxSizing: 'border-box', overflow: 'hidden' }}>
-        <FullCalendar
-          plugins={[ dayGridPlugin, timeGridPlugin, interactionPlugin ]}
-          initialView="timeGridDay"
-          headerToolbar={false}
-          locale="de"
+      <div className="calendar-wrapper">
+        <CalendarEngine 
           events={calendarEvents}
-          nowIndicator={true}
-          scrollTime="08:00:00"
-          height="100%"
-          
-          // --- INTERAKTION ---
-          selectable={isEditMode} // Nur im Edit-Modus darf man markieren!
-          select={handleDateSelect} // Wenn markiert wird -> Modal öffnen
-          editable={isEditMode} // Manuelle Einträge verschieben erlauben
-          
-          eventOrder="type" // Manuelle (type='manual') sollen über Auto liegen
-          slotEventOverlap={true}
-          
-          slotDuration="00:15:00" 
-          slotLabelInterval="00:15"
-          slotLabelFormat={{ hour: '2-digit', minute: '2-digit', hour12: false, meridiem: false }}
-          allDaySlot={false}
-          
-          eventContent={renderEventContent}
+          isEditMode={isEditMode}
+          viewMode={viewMode}
+          onDateSelect={handleDateSelect}
+          onEventClick={handleEventClick}
+          onDeleteSession={handleDeleteSession}
+          onEventDrop={handleEventChange} // Drag Handler
+          onEventResize={handleEventChange} // Resize Handler
         />
       </div>
     </div>

@@ -1,156 +1,107 @@
 html, body, #root {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
+  height: 100%; margin: 0; padding: 0; overflow: hidden;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f3f4f6; /* Sehr helles Grau für Kontrast */
+  background-color: #f3f4f6;
 }
 
-.fc {
-  height: 100%;
-  background-color: white;
+.app-container { height: 100vh; display: flex; flex-direction: column; }
+.calendar-wrapper { flex: 1; overflow: hidden; }
+
+/* --- HEADER (Buttons rechts fixiert) --- */
+.app-header {
+  background: white; padding: 15px 25px;
+  display: flex; 
+  justify-content: space-between; /* Schiebt Status nach links, Controls nach rechts */
+  align-items: center;
+  border-bottom: 1px solid #eee; 
+  box-shadow: 0 4px 15px rgba(0,0,0,0.03); 
+  z-index: 100;
+  width: 100%; /* Sicherstellen, dass er die volle Breite nutzt */
+  box-sizing: border-box;
 }
 
-/* --- 1. ZOOM & RASTER --- */
-.fc-timegrid-slot {
-  height: 80px !important; /* Riesige Slots für Lesbarkeit */
-  border-bottom: 1px solid #f1f2f6; /* Sehr dezente Linien */
+.header-status { font-size: 1.1rem; font-weight: 800; color: #2c3e50; display: flex; alignItems: center; gap: 10px; }
+.status-dot { width: 12px; height: 12px; borderRadius: 50%; background: #e74c3c; }
+.status-dot.active { background: #27ae60; }
+
+.header-controls { 
+  display: flex; 
+  gap: 12px; 
+  margin-left: auto; /* Zwingt die Gruppe nach rechts, falls justify versagt */
 }
 
-.fc-timegrid-slot-label-cushion {
-  font-size: 1.1rem;
-  font-weight: 800;
-  color: #a4b0be; /* Helles Grau für die Zeit, damit es nicht ablenkt */
-  letter-spacing: -0.5px;
-}
+/* --- BUTTONS --- */
+button { display: flex; align-items: center; gap: 6px; font-family: inherit; transition: all 0.2s; cursor: pointer; }
+.btn-secondary { padding: 10px 20px; background: #34495e; color: white; border: none; border-radius: 8px; font-weight: 600; }
+.btn-toggle { padding: 10px 20px; background: #95a5a6; color: white; border: none; border-radius: 8px; font-weight: 600; }
+.btn-toggle.active { background: #27ae60; }
+.btn-refresh { padding: 10px 20px; background: #ecf0f1; color: #2c3e50; border: none; border-radius: 8px; font-weight: 600; }
+.btn-save { background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 1rem; }
+.btn-save:hover { background: #219150; transform: translateY(-1px); }
+.btn-close { background: #95a5a6; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 1rem; }
+.btn-close:hover { background: #7f8c8d; }
 
-/* --- 2. EVENT STYLING (Die Karten) --- */
-.fc-event {
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  /* Mindesthöhe für Lesbarkeit */
-  min-height: 45px !important; 
-  /* Abstand rechts, damit man die Zeitachse noch sieht */
-  margin-right: 5px !important;
-  /* WICHTIG: Erlaubt das "Dachziegel"-Stapeln */
-  overflow: visible !important; 
+/* --- INPUTS (Modern) --- */
+.input-label { display: block; font-weight: 700; margin-bottom: 6px; color: #34495e; font-size: 0.9rem; }
+.input-text, .input-select, .input-time, .input-number { 
+  width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #e0e0e0; 
+  font-size: 1rem; box-sizing: border-box; background: #f9f9f9; transition: border 0.2s;
 }
+.input-text:focus, .input-select:focus, .input-time:focus, .input-number:focus { 
+  outline: none; border-color: #3498db; background: white; 
+}
+.input-row { display: flex; gap: 15px; margin-bottom: 15px; }
+.input-group { flex: 1; }
 
-/* Der Inhalt der Karte */
+/* --- KALENDER STYLES --- */
+.fc { height: 100%; background-color: white; }
+.fc-timegrid-slot { height: 80px !important; border-bottom: 1px solid #f1f2f6; }
+.fc-event { border: none !important; background: transparent !important; box-shadow: none !important; min-height: 45px !important; margin-right: 5px !important; overflow: visible !important; }
+
+/* --- LAYER 1: MANUELLE ARBEITSZEIT (Modern Card Design) --- */
+.manual-session-block {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 8px 12px; height: 100%; width: 100%;
+  border-radius: 8px; 
+  background: white; 
+  /* Dickerer linker Rand in Projektfarbe */
+  border-left-width: 6px; 
+  border-left-style: solid;
+  /* Subtiler Schatten + leichter Border für Kontrast */
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05);
+  border-top: 1px solid #f0f0f0;
+  border-right: 1px solid #f0f0f0;
+  border-bottom: 1px solid #f0f0f0;
+  z-index: 1000; position: relative;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.manual-session-block:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  z-index: 1001;
+}
+.manual-session-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.manual-session-title { font-weight: 800; font-size: 0.95rem; letter-spacing: -0.3px; }
+.manual-session-desc { font-size: 0.85rem; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-delete-session { background: rgba(231, 76, 60, 0.1); color: #c0392b; border: none; border-radius: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
+.btn-delete-session:hover { background: #c0392b; color: white; }
+
+/* --- LAYER 2: PROGRAMM LAYER --- */
 .app-block {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 0 12px;
-  height: 100%;
-  width: 100%;
-  
-  /* Modernes Styling */
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 0 12px; height: 100%; width: 100%;
   border-radius: 8px;
-  /* Subtiler Verlauf von oben nach unten für 3D-Effekt */
   background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(0,0,0,0.05) 100%);
-  
-  /* Schatten für Tiefe (Dachziegel-Effekt) */
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.1);
-  
-  /* Linker Rand als Akzent */
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
   border-left: 5px solid rgba(0,0,0,0.2);
-  
-  /* Glas-Effekt Rand oben */
   border-top: 1px solid rgba(255,255,255,0.4);
-  
-  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
-  cursor: pointer;
 }
+.block-title { font-weight: 700; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* HOVER EFFEKT: Karte springt nach vorne */
-.app-block:hover {
-  transform: translateY(-2px) scale(1.02);
-  z-index: 999 !important; /* Immer ganz oben */
-  box-shadow: 0 15px 30px rgba(0,0,0,0.25), 0 5px 10px rgba(0,0,0,0.2);
-}
-
-/* Text Styling */
-.block-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: white;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.5); /* Textschatten für Lesbarkeit auf jeder Farbe */
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-bottom: 2px;
-}
-
-.block-time {
-  font-size: 0.75rem;
-  color: rgba(255,255,255,0.9);
-  font-weight: 500;
-}
-
-/* --- MODAL (POPUP) --- */
-.modal-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-color: rgba(44, 62, 80, 0.7); /* Dunkleres Overlay */
-  backdrop-filter: blur(5px); /* Starker Blur */
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 16px;
-  width: 480px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.modal-header {
-  padding: 30px;
-  color: white;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  /* Verlauf im Header */
-  background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
-}
-
-.modal-icon { 
-  font-size: 3.5rem; 
-  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.2));
-}
-
-.modal-title h2 { 
-  margin: 0; 
-  font-size: 1.5rem; 
-  letter-spacing: -0.5px;
-}
-
+/* --- MODAL --- */
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(44, 62, 80, 0.6); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 9999; }
+.modal-content { background: white; border-radius: 16px; width: 500px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); overflow: hidden; animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.modal-header { padding: 25px; color: white; display: flex; align-items: center; gap: 15px; }
 .modal-body { padding: 30px; }
-
-.modal-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 0; border-bottom: 1px solid #f0f0f0;
-}
-.modal-label { font-weight: 600; color: #7f8c8d; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
-.modal-value { font-weight: 700; color: #2c3e50; font-size: 1.1rem; }
-
-.modal-footer { padding: 20px; text-align: right; background: #f8f9fa; }
-
-.btn-close {
-  background: #2c3e50; color: white; border: none;
-  padding: 12px 30px; border-radius: 8px; cursor: pointer; 
-  font-weight: 600; transition: transform 0.1s;
-}
-.btn-close:hover { transform: scale(1.05); background: #34495e; }
-
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+.modal-footer { padding: 20px 30px; text-align: right; background: #f8f9fa; display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid #eee; }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
