@@ -1,0 +1,455 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { listen } from '@tauri-apps/api/event';
+import Database from '@tauri-apps/plugin-sql'; 
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
+
+// Icons
+import { FaChrome, FaFirefox, FaEdge, FaTerminal, FaFileWord, FaFileExcel, FaCode, FaWindows, FaSpotify, FaDiscord, FaFolderPlus, FaTrash, FaBriefcase } from 'react-icons/fa';
+import { VscCode } from 'react-icons/vsc';
+
+import './App.css';
+
+interface LogEntry {
+  id: number;
+  title: string;
+  created_at: string;
+  project_id?: number; // NEU: Verknüpfung zum Projekt
+}
+
+interface Project {
+  id: number;
+  name: string;
+  color: string;
+}
+
+interface ColorEntry { name: string; color: string; }
+
+function App() {
+  const [currentWindow, setCurrentWindow] = useState("Warte auf Tracking...");
+  const [db, setDb] = useState<Database | null>(null);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [isCompact, setIsCompact] = useState(false);
+  
+  // Modals
+  const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
+  const [showProjectManager, setShowProjectManager] = useState(false);
+
+  // Daten
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectColor, setNewProjectColor] = useState("#3498db");
+
+  const lastSavedTitle = useRef<string>("");
+  const colorCache = useRef<Map<string, string>>(new Map());
+
+  // --- 1. DB Init ---
+  useEffect(() => {
+    async function initDb() {
+      try {
+        const database = await Database.load("sqlite:tracker.db");
+        
+        // Tabellen erstellen
+        await database.execute(
+          `CREATE TABLE IF NOT EXISTS logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            title TEXT, 
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )`
+        );
+        await database.execute(
+          `CREATE TABLE IF NOT EXISTS app_colors (name TEXT PRIMARY KEY, color TEXT)`
+        );
+        // NEU: Projekte Tabelle
+        await database.execute(
+          `CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            name TEXT, 
+            color TEXT
+          )`
+        );
+
+        // MIGRATION: Spalte project_id hinzufügen, falls nicht existiert
+        try {
+            await database.execute("ALTER TABLE logs ADD COLUMN project_id INTEGER");
+        } catch (e) {
+            // Ignorieren, wenn Spalte schon da ist (SQLite wirft Fehler)
+        }
+
+        setDb(database);
+        await loadColorsIntoCache(database);
+        await loadProjects(database); // Projekte laden
+        loadData(database, isCompact);
+      } catch (e) {
+        console.error("Init Error:", e);
+      }
+    }
+    initDb();
+  }, []);
+
+  // --- 2. Tracking ---
+  useEffect(() => {
+    const unlistenPromise = listen('active-window-change', async (event) => {
+      const newTitle = event.payload as string;
+      setCurrentWindow(newTitle);
+
+      if (db && newTitle !== lastSavedTitle.current && newTitle !== "Unbekannt") {
+        try {
+          // Wir speichern erstmal ohne Projekt (null)
+          await db.execute("INSERT INTO logs (title, project_id) VALUES ($1, NULL)", [newTitle]);
+          lastSavedTitle.current = newTitle;
+        } catch (e) {
+          console.error("Insert Error:", e);
+        }
+      }
+    });
+    return () => { unlistenPromise.then(unlisten => unlisten()); };
+  }, [db]);
+
+  useEffect(() => { if (db) loadData(db, isCompact); }, [isCompact]);
+
+  // --- PROJEKT LOGIK ---
+  async function loadProjects(database: Database) {
+      const rows = await database.select<Project[]>("SELECT * FROM projects");
+      setProjects(rows);
+  }
+
+  async function addProject() {
+      if (!db || !newProjectName) return;
+      await db.execute("INSERT INTO projects (name, color) VALUES ($1, $2)", [newProjectName, newProjectColor]);
+      setNewProjectName("");
+      await loadProjects(db);
+  }
+
+  async function deleteProject(id: number) {
+      if (!db) return;
+      await db.execute("DELETE FROM projects WHERE id = $1", [id]);
+      // Optional: Logs zurücksetzen, die dieses Projekt hatten
+      await db.execute("UPDATE logs SET project_id = NULL WHERE project_id = $1", [id]);
+      await loadProjects(db);
+      loadData(db, isCompact); // Kalender neu laden
+  }
+
+  async function assignProjectToEvent(logId: string, projectId: string) {
+      if (!db) return;
+      const pid = projectId === "" ? null : parseInt(projectId);
+      await db.execute("UPDATE logs SET project_id = $1 WHERE id = $2", [pid, logId]);
+      
+      // UI Update: Event im Kalender aktualisieren
+      loadData(db, isCompact);
+      setSelectedEvent(null); // Modal schließen
+  }
+
+  // --- DATEN LADEN ---
+  async function loadData(database: Database, compact: boolean) {
+    if (!database) return;
+    try {
+      // Wir laden jetzt auch die Projekt-Infos dazu (LEFT JOIN)
+      const query = `
+        SELECT l.*, p.name as project_name, p.color as project_color 
+        FROM logs l 
+        LEFT JOIN projects p ON l.project_id = p.id 
+        ORDER BY l.created_at ASC LIMIT 3000
+      `;
+      const rows = await database.select<any[]>(query);
+
+      const events = [];
+      for (let i = 0; i < rows.length; i++) {
+        const current = rows[i];
+        const next = rows[i + 1];
+
+        const timeString = current.created_at.replace(" ", "T") + "Z";
+        let start = new Date(timeString);
+        start.setSeconds(0, 0);
+        
+        let end;
+        if (next) {
+            const nextTimeString = next.created_at.replace(" ", "T") + "Z";
+            end = new Date(nextTimeString);
+            end.setSeconds(0, 0);
+        } else {
+            end = new Date(start.getTime() + 60000); 
+        }
+        if (start.getTime() === end.getTime()) end = new Date(start.getTime() + 60000);
+
+        const simpleAppName = simplifyAppName(current.title);
+        const appColor = await getOrGenerateColor(database, simpleAppName);
+
+        events.push({
+          id: current.id.toString(),
+          title: current.title,
+          start: start,
+          end: end,
+          display: 'block', 
+          extendedProps: {
+            fullTitle: current.title,
+            appColor: appColor,
+            simpleName: simpleAppName,
+            isCompact: compact,
+            // Projekt Infos
+            projectId: current.project_id,
+            projectName: current.project_name,
+            projectColor: current.project_color
+          }
+        });
+      }
+      setCalendarEvents(events);
+    } catch (e) {
+      console.error("Fehler beim Laden:", e);
+    }
+  }
+
+  // --- HELPER ---
+  async function loadColorsIntoCache(database: Database) {
+    const rows = await database.select<ColorEntry[]>("SELECT * FROM app_colors");
+    rows.forEach(r => colorCache.current.set(r.name, r.color));
+  }
+  async function getOrGenerateColor(database: Database, appName: string): Promise<string> {
+    if (colorCache.current.has(appName)) return colorCache.current.get(appName)!;
+    const newColor = stringToColor(appName);
+    try {
+      await database.execute("INSERT INTO app_colors (name, color) VALUES ($1, $2)", [appName, newColor]);
+      colorCache.current.set(appName, newColor);
+    } catch (e) {}
+    return newColor;
+  }
+  function simplifyAppName(title: string): string {
+    const t = title.toLowerCase();
+    if (t.includes('chrome')) return 'Google Chrome';
+    if (t.includes('firefox')) return 'Firefox';
+    if (t.includes('edge')) return 'Edge';
+    if (t.includes('code') || t.includes('visual studio')) return 'VS Code';
+    if (t.includes('word')) return 'Word';
+    if (t.includes('excel')) return 'Excel';
+    return title.split(' - ')[0] || title; 
+  }
+  function stringToColor(str: string) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
+    const h = Math.abs(hash) % 360;
+    return `hsl(${h}, 70%, 45%)`; 
+  }
+
+  // --- RENDERER ---
+  const renderEventContent = (eventInfo: any) => {
+    const props = eventInfo.event.extendedProps;
+    const compact = props.isCompact;
+    const startTime = eventInfo.event.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+    return (
+      <div 
+        className="app-block" 
+        style={{ 
+            backgroundColor: props.appColor,
+            opacity: compact ? 0.85 : 1.0,
+            boxShadow: compact ? 'none' : undefined,
+            // Wenn ein Projekt zugewiesen ist, dickerer Rand in Projektfarbe
+            borderLeft: props.projectColor ? `8px solid ${props.projectColor}` : undefined
+        }}
+      >
+        {/* Projekt Tag oben rechts */}
+        {props.projectName && (
+            <div className="project-tag" style={{ backgroundColor: props.projectColor }}>
+                {props.projectName}
+            </div>
+        )}
+
+        <div className="block-title" style={{ fontSize: compact ? '0.85rem' : '1rem' }}>
+            {props.simpleName}
+        </div>
+        {!compact && <div className="block-time">{startTime}</div>}
+      </div>
+    );
+  };
+
+  const handleEventClick = (clickInfo: any) => {
+    const props = clickInfo.event.extendedProps;
+    setSelectedEvent({
+      id: clickInfo.event.id, // ID für DB Update wichtig
+      title: props.fullTitle,
+      start: clickInfo.event.start,
+      end: clickInfo.event.end,
+      duration: clickInfo.event.end - clickInfo.event.start,
+      color: props.appColor,
+      simpleName: props.simpleName,
+      projectId: props.projectId
+    });
+  };
+
+  function getIcon(name: string) {
+      if(name.includes('Chrome')) return <FaChrome />;
+      if(name.includes('Code')) return <VscCode />;
+      if(name.includes('Word')) return <FaFileWord />;
+      return <FaWindows />;
+  }
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      
+      {/* --- PROJEKT MANAGER MODAL --- */}
+      {showProjectManager && (
+        <div className="modal-overlay" onClick={() => setShowProjectManager(false)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()}>
+                <div className="modal-header" style={{background: '#2c3e50'}}>
+                    <FaBriefcase size={30} />
+                    <h2>Projekte verwalten</h2>
+                </div>
+                <div className="modal-body">
+                    <div className="project-input-group">
+                        <input 
+                            className="input-field" 
+                            placeholder="Neues Projekt..." 
+                            value={newProjectName}
+                            onChange={e => setNewProjectName(e.target.value)}
+                        />
+                        <input 
+                            type="color" 
+                            className="color-picker"
+                            value={newProjectColor}
+                            onChange={e => setNewProjectColor(e.target.value)}
+                        />
+                        <button className="btn-save" onClick={addProject}><FaFolderPlus /></button>
+                    </div>
+                    <div className="project-list">
+                        {projects.map(p => (
+                            <div key={p.id} className="project-item">
+                                <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                                    <div style={{width: '15px', height: '15px', borderRadius: '50%', background: p.color}}></div>
+                                    <strong>{p.name}</strong>
+                                </div>
+                                <button onClick={() => deleteProject(p.id)} style={{background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer'}}>
+                                    <FaTrash />
+                                </button>
+                            </div>
+                        ))}
+                        {projects.length === 0 && <p style={{color: '#999', textAlign: 'center'}}>Keine Projekte angelegt.</p>}
+                    </div>
+                </div>
+                <div className="modal-footer">
+                    <button className="btn-close" onClick={() => setShowProjectManager(false)}>Schließen</button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* --- DETAIL MODAL --- */}
+      {selectedEvent && (
+        <div className="modal-overlay" onClick={() => setSelectedEvent(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header" style={{ backgroundColor: selectedEvent.color }}>
+                <div className="modal-icon">{getIcon(selectedEvent.simpleName)}</div>
+                <div className="modal-title">
+                    <h2>{selectedEvent.simpleName}</h2>
+                </div>
+            </div>
+            <div className="modal-body">
+              <p style={{fontSize: '0.95rem', color: '#555', marginBottom: '25px', lineHeight: '1.5', wordBreak: 'break-word'}}>
+                  {selectedEvent.title}
+              </p>
+              
+              {/* PROJEKT ZUWEISUNG */}
+              <div className="modal-row" style={{background: '#f8f9fa', padding: '10px', borderRadius: '6px'}}>
+                  <span className="modal-label">Projekt zuweisen:</span>
+                  <select 
+                    style={{padding: '5px', borderRadius: '4px', border: '1px solid #ddd', width: '150px'}}
+                    value={selectedEvent.projectId || ""}
+                    onChange={(e) => assignProjectToEvent(selectedEvent.id, e.target.value)}
+                  >
+                      <option value="">-- Kein Projekt --</option>
+                      {projects.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                  </select>
+              </div>
+
+              <div className="modal-row">
+                  <span className="modal-label">Startzeit</span>
+                  <span className="modal-value">{selectedEvent.start?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+              </div>
+              <div className="modal-row">
+                  <span className="modal-label">Endzeit</span>
+                  <span className="modal-value">{selectedEvent.end?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+              </div>
+              <div className="modal-row">
+                  <span className="modal-label">Dauer</span>
+                  <span className="modal-value">{Math.round(selectedEvent.duration / 1000)} Sek.</span>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-close" onClick={() => setSelectedEvent(null)}>Schließen</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{ 
+        background: 'white', padding: '15px 20px', 
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        borderBottom: '1px solid #eee', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', zIndex: 100
+      }}>
+        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#2c3e50', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{background: '#e74c3c', width: '10px', height: '10px', borderRadius: '50%', display: 'inline-block'}}></span>
+          {currentWindow}
+        </div>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          {/* Button für Projekt Manager */}
+          <button 
+            onClick={() => setShowProjectManager(true)}
+            style={{ 
+                padding: '10px 20px', cursor: 'pointer', 
+                background: '#34495e', color: 'white',
+                border: 'none', borderRadius: '8px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '5px'
+            }}
+          >
+            <FaBriefcase /> Projekte
+          </button>
+
+          <button 
+            onClick={() => setIsCompact(!isCompact)}
+            style={{ 
+                padding: '10px 20px', cursor: 'pointer', 
+                background: isCompact ? '#ecf0f1' : '#95a5a6', 
+                color: isCompact ? '#2c3e50' : 'white',
+                border: 'none', borderRadius: '8px', fontWeight: '600'
+            }}
+          >
+            {isCompact ? 'Kompakt' : 'Detail'}
+          </button>
+          <button 
+            onClick={() => db && loadData(db, isCompact)}
+            style={{ padding: '10px 20px', cursor: 'pointer', background: '#27ae60', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600' }}
+          >
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* Kalender */}
+      <div style={{ flex: 1, padding: '0', boxSizing: 'border-box', overflow: 'hidden' }}>
+        <FullCalendar
+          plugins={[ dayGridPlugin, timeGridPlugin, interactionPlugin ]}
+          initialView="timeGridDay"
+          headerToolbar={false}
+          locale="de"
+          events={calendarEvents}
+          nowIndicator={true}
+          scrollTime="08:00:00"
+          height="100%"
+          eventOrder="start"
+          slotEventOverlap={true}
+          slotDuration="00:15:00" 
+          slotLabelInterval="00:15"
+          slotLabelFormat={{ hour: '2-digit', minute: '2-digit', hour12: false, meridiem: false }}
+          allDaySlot={false}
+          eventContent={renderEventContent}
+          eventClick={handleEventClick}
+        />
+      </div>
+    </div>
+  );
+}
+
+export default App;

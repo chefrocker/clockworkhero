@@ -1,116 +1,177 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import Database from '@tauri-apps/plugin-sql'; 
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin from '@fullcalendar/interaction';
+import Database from '@tauri-apps/plugin-sql';
+import { FaPen, FaSave, FaBriefcase, FaFolderPlus, FaTrash } from 'react-icons/fa';
+
+// Imports der neuen Module
+import { initDatabase, logActiveWindow, loadAllEvents, loadProjects, addProject, deleteProject, saveSession, deleteSession } from './services/db';
+import { CalendarEngine } from './components/CalendarEngine';
+import { SessionModal } from './components/SessionModal';
+import { Project } from './types';
 import './App.css';
 
 function App() {
-  const [currentWindow, setCurrentWindow] = useState("Warte auf Tracking...");
-  const [dbStatus, setDbStatus] = useState("Datenbank wird geladen..."); // Neuer Status für UI
   const [db, setDb] = useState<Database | null>(null);
+  const [currentWindow, setCurrentWindow] = useState("Warte auf Tracking...");
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  
+  // UI States
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [showProjectManager, setShowProjectManager] = useState(false);
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  
+  // Temp Data für Modal
+  const [selection, setSelection] = useState<{start: Date, end: Date} | null>(null);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectColor, setNewProjectColor] = useState("#3498db");
+
   const lastSavedTitle = useRef<string>("");
 
-  // 1. Datenbank verbinden
+  // 1. INIT
   useEffect(() => {
-    async function initDb() {
+    async function start() {
       try {
-        console.log("DEBUG: Starte Datenbank-Verbindung...");
-        
-        // Schritt 1: Laden
-        const database = await Database.load("sqlite:tracker.db");
-        console.log("DEBUG: Database.load erfolgreich!");
-
-        // Schritt 2: Tabelle erstellen
-        console.log("DEBUG: Erstelle Tabelle...");
-        await database.execute(
-          `CREATE TABLE IF NOT EXISTS logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, 
-            title TEXT, 
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-          )`
-        );
-        console.log("DEBUG: Tabelle 'logs' existiert oder wurde erstellt.");
-        
+        const database = await initDatabase();
         setDb(database);
-        setDbStatus("Datenbank: Verbunden ✅");
-      } catch (e) {
-        console.error("DEBUG ERROR (Init):", e);
-        setDbStatus("Datenbank: FEHLER ❌ (Siehe Konsole)");
-      }
+        refreshData(database, isEditMode);
+      } catch (e) { console.error(e); }
     }
-    initDb();
+    start();
   }, []);
 
-  // 2. Tracking & Speichern
+  // 2. TRACKING
   useEffect(() => {
     const unlistenPromise = listen('active-window-change', async (event) => {
-      const newTitle = event.payload as string;
-      setCurrentWindow(newTitle);
-
-      if (db && newTitle !== lastSavedTitle.current && newTitle !== "Unbekannt") {
-        try {
-          console.log(`DEBUG: Versuche zu speichern: "${newTitle}"`);
-          
-          // Schritt 3: Insert
-          const result = await db.execute(
-            "INSERT INTO logs (title) VALUES ($1)", 
-            [newTitle]
-          );
-          
-          console.log("DEBUG: Gespeichert! Result:", result);
-          lastSavedTitle.current = newTitle;
-        } catch (e) {
-          console.error("DEBUG ERROR (Insert):", e);
-        }
+      const title = event.payload as string;
+      setCurrentWindow(title);
+      if (db && title !== lastSavedTitle.current && title !== "Unbekannt") {
+        await logActiveWindow(db, title);
+        lastSavedTitle.current = title;
       }
     });
-
-    return () => {
-      unlistenPromise.then(unlisten => unlisten());
-    };
+    return () => { unlistenPromise.then(unlisten => unlisten()); };
   }, [db]);
 
-  const handleDateClick = (arg: any) => {
-    console.log('Datum angeklickt: ' + arg.dateStr);
+  // 3. RELOAD bei Modus-Wechsel
+  useEffect(() => { if (db) refreshData(db, isEditMode); }, [isEditMode]);
+
+  async function refreshData(database: Database, editMode: boolean) {
+    const events = await loadAllEvents(database, editMode);
+    const projs = await loadProjects(database);
+    setCalendarEvents(events);
+    setProjects(projs);
   }
 
+  // --- HANDLER ---
+  const handleDateSelect = (info: any) => {
+    setSelection({ start: info.start, end: info.end });
+    setShowSessionModal(true);
+  };
+
+  const handleSaveSession = async (projectId: string, desc: string) => {
+    if (db && selection) {
+      await saveSession(db, selection.start, selection.end, projectId, desc);
+      setShowSessionModal(false);
+      refreshData(db, isEditMode);
+    }
+  };
+
+  const handleDeleteSession = async (id: string) => {
+    if (db) {
+      await deleteSession(db, id);
+      refreshData(db, isEditMode);
+    }
+  };
+
+  const handleAddProject = async () => {
+    if (db && newProjectName) {
+      await addProject(db, newProjectName, newProjectColor);
+      setNewProjectName("");
+      refreshData(db, isEditMode);
+    }
+  };
+
+  const handleDeleteProject = async (id: number) => {
+    if (db) {
+      await deleteProject(db, id);
+      refreshData(db, isEditMode);
+    }
+  };
+
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="app-container">
       
-      {/* Statusleiste */}
-      <div style={{ 
-        background: '#2c3e50', 
-        color: 'white', 
-        padding: '10px', 
-        display: 'flex',
-        justifyContent: 'space-between',
-        fontFamily: 'monospace',
-        borderBottom: '2px solid #34495e'
-      }}>
-        <span>Fenster: <b>{currentWindow}</b></span>
-        <span>{dbStatus}</span>
+      <SessionModal 
+        isOpen={showSessionModal}
+        onClose={() => setShowSessionModal(false)}
+        onSave={handleSaveSession}
+        start={selection?.start || null}
+        end={selection?.end || null}
+        projects={projects}
+      />
+
+      {/* PROJEKT MANAGER (Inline Modal für Einfachheit hier gelassen, könnte auch ausgelagert werden) */}
+      {showProjectManager && (
+        <div className="modal-overlay" onClick={() => setShowProjectManager(false)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()}>
+                <div className="modal-header" style={{background: '#2c3e50'}}>
+                    <FaBriefcase size={24} />
+                    <h2>Projekte</h2>
+                </div>
+                <div className="modal-body">
+                    <div style={{display: 'flex', gap: '10px', marginBottom: '15px'}}>
+                        <input className="input-text" placeholder="Projektname" value={newProjectName} onChange={e => setNewProjectName(e.target.value)} />
+                        <input type="color" value={newProjectColor} onChange={e => setNewProjectColor(e.target.value)} style={{height: '40px', width: '50px', border: 'none', cursor: 'pointer'}} />
+                        <button className="btn-save" onClick={handleAddProject} style={{width: 'auto', padding: '0 15px'}}><FaFolderPlus /></button>
+                    </div>
+                    <div style={{maxHeight: '300px', overflowY: 'auto'}}>
+                        {projects.map(p => (
+                            <div key={p.id} style={{display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #eee'}}>
+                                <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                                    <div style={{width: '15px', height: '15px', borderRadius: '50%', background: p.color}}></div>
+                                    <strong>{p.name}</strong>
+                                </div>
+                                <button onClick={() => handleDeleteProject(p.id)} style={{background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer'}}><FaTrash /></button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div className="modal-footer"><button className="btn-close" onClick={() => setShowProjectManager(false)}>Schließen</button></div>
+            </div>
+        </div>
+      )}
+
+      {/* HEADER */}
+      <div className="app-header">
+        <div className="header-status">
+          <span className={`status-dot ${isEditMode ? 'active' : ''}`}></span>
+          {isEditMode ? 'Modus: Erfassung' : 'Modus: Analyse'}
+        </div>
+        <div className="header-controls">
+          <button className="btn-secondary" onClick={() => setShowProjectManager(true)}>
+            <FaBriefcase /> Projekte
+          </button>
+          <button 
+            className={`btn-toggle ${isEditMode ? 'active' : ''}`}
+            onClick={() => setIsEditMode(!isEditMode)}
+          >
+            {isEditMode ? <FaSave /> : <FaPen />}
+            {isEditMode ? 'Erfassung beenden' : 'Zeiten erfassen'}
+          </button>
+          <button className="btn-refresh" onClick={() => db && refreshData(db, isEditMode)}>
+            Refresh
+          </button>
+        </div>
       </div>
 
-      <div style={{ flex: 1, padding: '10px', boxSizing: 'border-box', overflow: 'hidden' }}>
-        <FullCalendar
-          plugins={[ dayGridPlugin, timeGridPlugin, interactionPlugin ]}
-          initialView="timeGridWeek"
-          headerToolbar={{
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,timeGridWeek,timeGridDay'
-          }}
-          locale="de"
-          firstDay={1}
-          slotMinTime="06:00:00"
-          slotMaxTime="22:00:00"
-          allDaySlot={false}
-          selectable={true}
-          dateClick={handleDateClick}
-          height="100%"
+      {/* KALENDER */}
+      <div className="calendar-wrapper">
+        <CalendarEngine 
+          events={calendarEvents}
+          isEditMode={isEditMode}
+          onDateSelect={handleDateSelect}
+          onDeleteSession={handleDeleteSession}
         />
       </div>
     </div>
