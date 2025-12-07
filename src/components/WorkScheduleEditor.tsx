@@ -11,8 +11,11 @@ export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) 
   
   const addBlock = (dayIndex: number) => {
     const updated = [...weekSchedule];
-    // Kopie erstellen um Mutation zu vermeiden
-    updated[dayIndex] = { ...updated[dayIndex], blocks: [...updated[dayIndex].blocks] };
+    // Deep copy des Tages, um Mutation zu vermeiden
+    updated[dayIndex] = { 
+        ...updated[dayIndex], 
+        blocks: [...updated[dayIndex].blocks] 
+    };
     
     const newBlock: WorkTimeBlock = {
       id: `block-${Date.now()}`,
@@ -26,18 +29,27 @@ export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) 
 
   const removeBlock = (dayIndex: number, blockId: string) => {
     const updated = [...weekSchedule];
-    updated[dayIndex] = { ...updated[dayIndex], blocks: updated[dayIndex].blocks.filter(b => b.id !== blockId) };
+    updated[dayIndex] = { 
+        ...updated[dayIndex], 
+        blocks: updated[dayIndex].blocks.filter(b => b.id !== blockId) 
+    };
     updated[dayIndex] = calculateDayHours(updated[dayIndex]);
     onChange(updated);
   };
 
   const updateBlock = (dayIndex: number, blockId: string, field: 'start' | 'end', value: string) => {
     const updated = [...weekSchedule];
-    updated[dayIndex] = { ...updated[dayIndex], blocks: [...updated[dayIndex].blocks] };
+    updated[dayIndex] = { 
+        ...updated[dayIndex], 
+        blocks: [...updated[dayIndex].blocks] 
+    };
     
     const blockIndex = updated[dayIndex].blocks.findIndex(b => b.id === blockId);
     if (blockIndex !== -1) {
-      updated[dayIndex].blocks[blockIndex] = { ...updated[dayIndex].blocks[blockIndex], [field]: value };
+      updated[dayIndex].blocks[blockIndex] = { 
+          ...updated[dayIndex].blocks[blockIndex], 
+          [field]: value 
+      };
       updated[dayIndex] = calculateDayHours(updated[dayIndex]);
       onChange(updated);
     }
@@ -48,8 +60,11 @@ export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) 
     updated[dayIndex] = { ...updated[dayIndex], isWorkday: !updated[dayIndex].isWorkday };
     
     if (!updated[dayIndex].isWorkday) {
-      updated[dayIndex].blocks = [];
+      // Wenn deaktiviert, keine Stunden
       updated[dayIndex].totalHours = 0;
+      // Wir behalten die Blöcke im Hintergrund oder löschen sie? 
+      // Besser: Wir lassen sie da, aber berechnen 0h, damit man sie beim Reaktivieren wieder hat.
+      // Oder wir setzen einen Standard-Block. Hier: Standard.
     } else if (updated[dayIndex].blocks.length === 0) {
       updated[dayIndex].blocks = [{
         id: `block-${Date.now()}`,
@@ -57,6 +72,9 @@ export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) 
         end: "17:00"
       }];
       updated[dayIndex] = calculateDayHours(updated[dayIndex]);
+    } else {
+        // Reaktiviert mit existierenden Blöcken -> neu berechnen
+        updated[dayIndex] = calculateDayHours(updated[dayIndex]);
     }
     onChange(updated);
   };
@@ -66,14 +84,14 @@ export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) 
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
         <h3 className="settings-h3" style={{ margin: 0 }}>Wochenplan</h3>
-        <div style={{ fontSize: '0.9rem', color: '#64748b' }}>
-          Gesamt: <strong>{weekSchedule.reduce((sum, d) => sum + (d.totalHours || 0), 0).toFixed(1)}h</strong> / Woche
+        <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+          Gesamt: <strong>{weekSchedule.reduce((sum, d) => sum + (d.isWorkday ? d.totalHours : 0), 0).toFixed(1)}h</strong> / Woche
         </div>
       </div>
 
       {weekSchedule.map((day, dayIdx) => (
         <DayCard
-          key={day.dayName} // dayShort ist sicherer, aber dayName geht auch
+          key={day.dayName}
           day={day}
           dayIndex={dayIdx}
           onToggleWorkday={toggleWorkday}
@@ -88,7 +106,7 @@ export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) 
 
 // --- HELPER: Stunden berechnen ---
 function calculateDayHours(day: DaySchedule): DaySchedule {
-  if (!day.isWorkday || day.blocks.length === 0) {
+  if (!day.blocks || day.blocks.length === 0) {
     return { ...day, totalHours: 0 };
   }
   
@@ -117,11 +135,11 @@ interface DayCardProps {
 const DayCard: React.FC<DayCardProps> = ({ day, dayIndex, onToggleWorkday, onAddBlock, onRemoveBlock, onUpdateBlock }) => {
   return (
     <div style={{
-      border: '1px solid #e2e8f0',
+      border: '1px solid var(--border-color)',
       borderRadius: '12px',
-      padding: '20px',
-      background: day.isWorkday ? 'white' : '#f8fafc',
-      opacity: day.isWorkday ? 1 : 0.8,
+      padding: '15px',
+      background: day.isWorkday ? 'var(--panel-bg)' : 'var(--bg-color)',
+      opacity: day.isWorkday ? 1 : 0.7,
       transition: 'all 0.2s'
     }}>
       
@@ -135,16 +153,16 @@ const DayCard: React.FC<DayCardProps> = ({ day, dayIndex, onToggleWorkday, onAdd
               onChange={() => onToggleWorkday(dayIndex)}
               style={{ width: '18px', height: '18px', cursor: 'pointer' }}
             />
-            <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: day.isWorkday ? '#1e293b' : '#94a3b8' }}>{day.dayName}</span>
+            <span style={{ fontWeight: 'bold', fontSize: '1rem', color: day.isWorkday ? 'var(--text-color)' : 'var(--text-secondary)' }}>{day.dayName}</span>
           </label>
           
           {day.isWorkday && (
             <span style={{
               background: '#dbeafe',
               color: '#1e40af',
-              padding: '4px 12px',
-              borderRadius: '12px',
-              fontSize: '0.85rem',
+              padding: '2px 10px',
+              borderRadius: '10px',
+              fontSize: '0.8rem',
               fontWeight: '600'
             }}>
               {(day.totalHours || 0).toFixed(1)}h
@@ -156,40 +174,41 @@ const DayCard: React.FC<DayCardProps> = ({ day, dayIndex, onToggleWorkday, onAdd
           <button
             className="btn-secondary"
             onClick={() => onAddBlock(dayIndex)}
-            style={{ padding: '8px 12px', fontSize: '0.85rem' }}
+            style={{ padding: '6px 10px', fontSize: '0.8rem' }}
           >
-            <FaPlus /> Block
+            <FaPlus size={10} /> Block
           </button>
         )}
       </div>
 
       {/* Zeitblöcke */}
       {day.isWorkday && day.blocks.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {day.blocks.map(block => (
             <div key={block.id} style={{
               display: 'flex',
               alignItems: 'center',
               gap: '10px',
-              background: '#f1f5f9',
-              padding: '12px',
-              borderRadius: '8px'
+              background: 'var(--bg-color)',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              border: '1px solid var(--border-color)'
             }}>
-              <FaClock color="#64748b" />
+              <FaClock color="var(--text-secondary)" size={14} />
               <input
                 type="time"
                 className="input-time"
                 value={block.start}
                 onChange={(e) => onUpdateBlock(dayIndex, block.id, 'start', e.target.value)}
-                style={{ width: '110px' }}
+                style={{ width: '100px', height: '32px', padding: '4px 8px' }}
               />
-              <span style={{ color: '#94a3b8', fontWeight: 'bold' }}>—</span>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 'bold' }}>—</span>
               <input
                 type="time"
                 className="input-time"
                 value={block.end}
                 onChange={(e) => onUpdateBlock(dayIndex, block.id, 'end', e.target.value)}
-                style={{ width: '110px' }}
+                style={{ width: '100px', height: '32px', padding: '4px 8px' }}
               />
               
               {day.blocks.length > 1 && (
@@ -200,12 +219,13 @@ const DayCard: React.FC<DayCardProps> = ({ day, dayIndex, onToggleWorkday, onAdd
                     border: 'none',
                     color: '#ef4444',
                     cursor: 'pointer',
-                    padding: '8px',
-                    marginLeft: 'auto'
+                    padding: '5px',
+                    marginLeft: 'auto',
+                    display: 'flex', alignItems: 'center'
                   }}
                   title="Block entfernen"
                 >
-                  <FaTrash />
+                  <FaTrash size={12} />
                 </button>
               )}
             </div>

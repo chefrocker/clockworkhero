@@ -16,7 +16,13 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
       <div className="manual-session-block" style={{ 
           background: gradient,
           borderRadius: '6px',
-          border: '1px solid rgba(255,255,255,0.2)',
+          // FIX: Border Konflikt gelöst - Einzelne Seiten statt "border"
+          borderTop: '1px solid rgba(255,255,255,0.2)',
+          borderRight: '1px solid rgba(255,255,255,0.2)',
+          borderBottom: '1px solid rgba(255,255,255,0.2)',
+          // borderLeft wird dynamisch gesetzt, daher hier kein "border" Property nutzen!
+          borderLeft: 'none', 
+          
           boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
           color: 'white',
           padding: '4px 8px',
@@ -85,7 +91,10 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
     overflow: 'hidden',
     height: '100%',
     borderRadius: '6px',
-    border: '1px solid rgba(0,0,0,0.05)',
+    // FIX: Auch hier Border Konflikt vermeiden
+    borderTop: '1px solid rgba(0,0,0,0.05)',
+    borderRight: '1px solid rgba(0,0,0,0.05)',
+    borderBottom: '1px solid rgba(0,0,0,0.05)',
   };
 
   return (

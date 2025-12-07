@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Cropper from 'react-easy-crop';
 import Database from '@tauri-apps/plugin-sql';
-import { FaCog, FaSave, FaClock, FaPalette, FaDatabase, FaTrash, FaFileExcel, FaBriefcase, FaPlus, FaImage, FaCheck, FaTimes, FaLock, FaUnlock, FaHdd, FaKey, FaUndo, FaInfoCircle } from 'react-icons/fa';
+import { open } from '@tauri-apps/plugin-dialog';
+import { readFile } from '@tauri-apps/plugin-fs';
+import { FaCog, FaSave, FaClock, FaPalette, FaDatabase, FaTrash, FaFileExcel, FaBriefcase, FaPlus, FaImage, FaCheck, FaTimes, FaLock, FaUnlock, FaHdd, FaKey, FaUndo, FaInfoCircle, FaSun, FaMoon } from 'react-icons/fa';
 import { AppSettings, Project, DaySchedule } from '../types';
 import { AppIcon } from './AppIcon';
 import { getCroppedImg } from '../utils/imageUtils';
@@ -14,16 +16,17 @@ interface Props {
   settings: AppSettings;
   projects: Project[];
   onSaveSettings: (newSettings: AppSettings) => void;
-  // FIX: Typen von string zu 'app' | 'image' geändert
   onUpdateProject: (id: number, name: string, color: string, icon?: string, iconType?: 'app' | 'image') => void;
   onDeleteProject: (id: number) => void;
-  // FIX: Typen von string zu 'app' | 'image' geändert
   onAddProject: (name: string, color: string, icon?: string, iconType?: 'app' | 'image') => void;
   onResetData: () => void;
   db: Database | null;
 }
 
-// HELPER: HSL zu Hex Konverter für Color Picker
+// ... (Helper Funktionen hslToHex, colorToHex, getDefaultWeekSchedule bleiben gleich) ...
+// ... (Bitte aus vorheriger Antwort kopieren) ...
+
+// HELPER (Wiederholung zur Sicherheit)
 function hslToHex(h: number, s: number, l: number) {
   l /= 100;
   const a = s * Math.min(l, 1 - l) / 100;
@@ -36,6 +39,7 @@ function hslToHex(h: number, s: number, l: number) {
 }
 
 function colorToHex(color: string): string {
+    if (!color) return '#000000';
     if (color.startsWith('#')) return color;
     if (color.startsWith('hsl')) {
         const match = color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
@@ -60,11 +64,7 @@ function getDefaultWeekSchedule(): DaySchedule[] {
   return days.map((d, idx) => ({
     ...d,
     isWorkday: idx < 5,
-    blocks: idx < 5 ? [{
-      id: `block-${idx}-1`,
-      start: "08:00",
-      end: "17:00"
-    }] : [],
+    blocks: idx < 5 ? [{ id: `block-${idx}-1`, start: "08:00", end: "17:00" }] : [],
     totalHours: idx < 5 ? 9 : 0
   }));
 }
@@ -103,6 +103,9 @@ export const SettingsModal: React.FC<Props> = ({
         if (!initSettings.weekSchedule || initSettings.weekSchedule.length === 0) {
             initSettings.weekSchedule = getDefaultWeekSchedule();
         }
+        if (!initSettings.hiddenDays) {
+            initSettings.hiddenDays = [];
+        }
         setLocalSettings(initSettings);
 
         const hasPw = !!settings.adminPassword;
@@ -121,6 +124,43 @@ export const SettingsModal: React.FC<Props> = ({
   const onCropComplete = useCallback((_croppedArea: any, croppedAreaPixels: any) => {
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
+
+  // --- ICON UPDATE LOGIC (Verbessert) ---
+  const handleIconUpdate = async (target: 'project' | 'app', idOrName: string | number) => {
+      try {
+          const file = await open({
+              multiple: false,
+              filters: [{ name: 'Bilder', extensions: ['png', 'jpg', 'jpeg', 'webp', 'ico'] }]
+          });
+
+          if (!file) return;
+
+          // Datei lesen
+          const contents = await readFile(file as string);
+          
+          // Sicherere Base64 Konvertierung für große Dateien
+          let binary = '';
+          const bytes = new Uint8Array(contents);
+          const len = bytes.byteLength;
+          for (let i = 0; i < len; i++) {
+              binary += String.fromCharCode(bytes[i]);
+          }
+          const base64 = btoa(binary);
+          const dataUrl = `data:image/png;base64,${base64}`;
+
+          if (target === 'project') {
+              const proj = projects.find(p => p.id === idOrName);
+              if (proj) {
+                  onUpdateProject(proj.id, proj.name, proj.color, dataUrl, 'image');
+              }
+          } else if (target === 'app') {
+              alert("Benutzerdefinierte Icons für Apps sind in dieser Version noch nicht implementiert. Du kannst aber die Farbe ändern.");
+          }
+      } catch (e) {
+          console.error("Fehler beim Icon-Update:", e);
+          alert("Fehler beim Laden des Bildes.");
+      }
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, projId: number | null) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -189,6 +229,17 @@ export const SettingsModal: React.FC<Props> = ({
       }
   };
 
+  const toggleHiddenDay = (dayIndex: number) => {
+      const currentHidden = localSettings.hiddenDays || [];
+      let newHidden;
+      if (currentHidden.includes(dayIndex)) {
+          newHidden = currentHidden.filter(d => d !== dayIndex);
+      } else {
+          newHidden = [...currentHidden, dayIndex];
+      }
+      setLocalSettings({ ...localSettings, hiddenDays: newHidden });
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -220,7 +271,7 @@ export const SettingsModal: React.FC<Props> = ({
 
         <div style={{display: 'flex', flex: 1, overflow: 'hidden'}}>
             
-            <div style={{width: '220px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', padding: '20px 0'}}>
+            <div style={{width: '220px', background: 'var(--bg-color)', borderRight: '1px solid var(--border-color)', padding: '20px 0'}}>
                 <TabButton icon={<FaClock />} label="Allgemein" active={activeTab === 'general'} onClick={() => setActiveTab('general')} />
                 <TabButton icon={<FaPalette />} label="Tracking & Design" active={activeTab === 'tracking'} onClick={() => setActiveTab('tracking')} />
                 <TabButton icon={<FaBriefcase />} label="Projekte" active={activeTab === 'projects'} onClick={() => setActiveTab('projects')} />
@@ -229,7 +280,7 @@ export const SettingsModal: React.FC<Props> = ({
                 <TabButton icon={<FaInfoCircle />} label="Über" active={activeTab === 'about'} onClick={() => setActiveTab('about')} />
             </div>
 
-            <div style={{flex: 1, padding: '40px', overflowY: 'auto'}}>
+            <div style={{flex: 1, padding: '40px', overflowY: 'auto', background: 'var(--panel-bg)'}}>
                 
                 {activeTab === 'general' && (
                     <div>
@@ -238,40 +289,72 @@ export const SettingsModal: React.FC<Props> = ({
                             onChange={(schedule) => setLocalSettings({ ...localSettings, weekSchedule: schedule })}
                         />
                         
-                        <h3 className="settings-h3" style={{ marginTop: '40px' }}>Ziele</h3>
+                        <h3 className="settings-h3" style={{ marginTop: '40px', color: 'var(--text-color)' }}>Kalender Ansicht</h3>
+                        <p className="settings-desc" style={{color: 'var(--text-secondary)'}}>Wähle die Tage, die in der Wochenansicht angezeigt werden sollen.</p>
+                        <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
+                            {['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'].map((day, idx) => (
+                                <label key={idx} style={{display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', padding: '8px 12px', background: 'var(--bg-color)', borderRadius: '6px', border: '1px solid var(--border-color)', color: 'var(--text-color)'}}>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={!(localSettings.hiddenDays || []).includes(idx)}
+                                        onChange={() => toggleHiddenDay(idx)}
+                                    />
+                                    {day}
+                                </label>
+                            ))}
+                        </div>
+
+                        <h3 className="settings-h3" style={{ marginTop: '40px', color: 'var(--text-color)' }}>Ziele</h3>
                         <div className="input-group">
                             <label className="input-label">Tagesziel (Stunden)</label>
-                            <input
-                                type="number"
-                                className="input-number"
-                                value={localSettings.dailyTarget || 0}
-                                onChange={e => setLocalSettings({ ...localSettings, dailyTarget: parseFloat(e.target.value) })}
-                            />
+                            <input type="number" className="input-number" value={localSettings.dailyTarget || 0} onChange={e => setLocalSettings({ ...localSettings, dailyTarget: parseFloat(e.target.value) })} />
                         </div>
                     </div>
                 )}
 
                 {activeTab === 'tracking' && (
                     <div>
-                        <h3 className="settings-h3">Activity Stream</h3>
-                        <div style={{marginBottom: '30px', background: '#f1f5f9', padding: '20px', borderRadius: '8px'}}>
+                        <h3 className="settings-h3" style={{color: 'var(--text-color)'}}>Design</h3>
+                        <div className="input-group" style={{marginBottom: '20px'}}>
+                            <label className="input-label">Erscheinungsbild</label>
+                            <div style={{display: 'flex', gap: '15px'}}>
+                                <button 
+                                    className="btn-secondary" 
+                                    style={{
+                                        background: !localSettings.darkMode ? '#3b82f6' : 'transparent', 
+                                        color: !localSettings.darkMode ? 'white' : 'var(--text-color)',
+                                        borderColor: !localSettings.darkMode ? '#3b82f6' : 'var(--border-color)'
+                                    }}
+                                    onClick={() => setLocalSettings({...localSettings, darkMode: false})}
+                                >
+                                    <FaSun /> Light Mode
+                                </button>
+                                <button 
+                                    className="btn-secondary" 
+                                    style={{
+                                        background: localSettings.darkMode ? '#3b82f6' : 'transparent', 
+                                        color: localSettings.darkMode ? 'white' : 'var(--text-color)',
+                                        borderColor: localSettings.darkMode ? '#3b82f6' : 'var(--border-color)'
+                                    }}
+                                    onClick={() => setLocalSettings({...localSettings, darkMode: true})}
+                                >
+                                    <FaMoon /> Dark Mode
+                                </button>
+                            </div>
+                        </div>
+
+                        <h3 className="settings-h3" style={{color: 'var(--text-color)'}}>Activity Stream</h3>
+                        <div style={{marginBottom: '30px', background: 'var(--bg-color)', padding: '20px', borderRadius: '8px'}}>
                             <label className="input-label">Gruppierung: {localSettings.groupingThreshold} Minuten</label>
                             <input type="range" min="1" max="60" step="1" style={{width: '100%', marginTop: '10px'}} value={localSettings.groupingThreshold || 5} onChange={e => setLocalSettings({...localSettings, groupingThreshold: parseInt(e.target.value)})} />
-                        </div>
-                        <h3 className="settings-h3">Design</h3>
-                        <div className="input-group">
-                            <label className="input-label">Theme</label>
-                            <select className="input-select" value={localSettings.theme || 'light'} onChange={e => setLocalSettings({...localSettings, theme: e.target.value})}>
-                                <option value="light">Modern Light</option>
-                            </select>
                         </div>
                     </div>
                 )}
 
                 {activeTab === 'projects' && (
                     <div>
-                        <h3 className="settings-h3">Neues Projekt</h3>
-                        <div style={{display: 'flex', gap: '10px', marginBottom: '30px', padding: '20px', background: '#f1f5f9', borderRadius: '12px', alignItems: 'flex-end'}}>
+                        <h3 className="settings-h3" style={{color: 'var(--text-color)'}}>Neues Projekt</h3>
+                        <div style={{display: 'flex', gap: '10px', marginBottom: '30px', padding: '20px', background: 'var(--bg-color)', borderRadius: '12px', alignItems: 'flex-end'}}>
                             <div style={{flex: 1}}>
                                 <label className="input-label">Name</label>
                                 <input className="input-text" placeholder="z.B. Kunde A" value={newProjName || ''} onChange={e => setNewProjName(e.target.value)} />
@@ -293,11 +376,17 @@ export const SettingsModal: React.FC<Props> = ({
                             <button className="btn-save" onClick={() => { onAddProject(newProjName, newProjColor, newProjIcon, newProjIconType); setNewProjName(""); setNewProjIcon(""); }} style={{height: '42px'}}><FaPlus /> Erstellen</button>
                         </div>
 
-                        <h3 className="settings-h3">Vorhandene Projekte</h3>
-                        <div style={{border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden'}}>
+                        <h3 className="settings-h3" style={{color: 'var(--text-color)'}}>Vorhandene Projekte</h3>
+                        <div style={{border: '1px solid var(--border-color)', borderRadius: '12px', overflow: 'hidden'}}>
                             {projects.map(p => (
-                                <div key={p.id} style={{display: 'flex', alignItems: 'center', padding: '15px', borderBottom: '1px solid #f1f5f9', background: 'white', gap: '15px'}}>
-                                    <div style={{width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', borderRadius: '6px'}}>
+                                <div key={p.id} style={{display: 'flex', alignItems: 'center', padding: '15px', borderBottom: '1px solid var(--border-color)', background: 'var(--panel-bg)', gap: '15px'}}>
+                                    {/* ICON KLICKBAR MACHEN */}
+                                    <div 
+                                        className="icon-editable"
+                                        onClick={() => handleIconUpdate('project', p.id)}
+                                        title="Klicken um Icon zu ändern"
+                                        style={{width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-color)', borderRadius: '6px'}}
+                                    >
                                         {p.iconType === 'image' ? (
                                             <img src={p.icon || ''} alt="" style={{width: '100%', height: '100%', objectFit: 'contain'}} />
                                         ) : (
@@ -315,18 +404,18 @@ export const SettingsModal: React.FC<Props> = ({
 
                 {activeTab === 'colors' && (
                     <div>
-                        <h3 className="settings-h3">Activity Farben</h3>
-                        <p className="settings-desc">Hier kannst du Farben für erkannte Programme festlegen.</p>
+                        <h3 className="settings-h3" style={{color: 'var(--text-color)'}}>Activity Farben</h3>
+                        <p className="settings-desc" style={{color: 'var(--text-secondary)'}}>Hier kannst du Farben für erkannte Programme festlegen.</p>
                         <input className="input-text" placeholder="Suchen..." value={appSearch} onChange={e => setAppSearch(e.target.value)} style={{marginBottom: '20px'}} />
                         
                         <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '10px', maxHeight: '400px', overflowY: 'auto'}}>
                             {knownApps.filter(a => a.name.toLowerCase().includes(appSearch.toLowerCase())).map(app => (
-                                <div key={app.name} style={{background: 'white', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px'}}>
-                                    <div style={{width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', borderRadius: '6px'}}>
+                                <div key={app.name} style={{background: 'var(--bg-color)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '10px'}}>
+                                    <div style={{width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--panel-bg)', borderRadius: '6px'}}>
                                         <AppIcon appName={app.name} fallbackColor={app.color} />
                                     </div>
                                     <div style={{flex: 1, overflow: 'hidden'}}>
-                                        <div style={{fontSize: '0.9rem', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}} title={app.name}>{app.name}</div>
+                                        <div style={{fontSize: '0.9rem', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-color)'}} title={app.name}>{app.name}</div>
                                     </div>
                                     <input type="color" value={colorToHex(app.color)} onChange={e => handleAppColorChange(app.name, e.target.value)} style={{width: '30px', height: '30px', border: 'none', cursor: 'pointer', borderRadius: '50%'}} />
                                 </div>
@@ -337,12 +426,12 @@ export const SettingsModal: React.FC<Props> = ({
 
                 {activeTab === 'database' && (
                     <div>
-                        <h3 className="settings-h3">Datenbank Verwaltung</h3>
+                        <h3 className="settings-h3" style={{color: 'var(--text-color)'}}>Datenbank Verwaltung</h3>
                         
                         {!isDbUnlocked ? (
-                            <div style={{background: '#f8fafc', padding: '30px', borderRadius: '12px', textAlign: 'center', border: '1px solid #e2e8f0'}}>
-                                <FaLock size={32} style={{color: '#94a3b8', marginBottom: '15px'}} />
-                                <p>Dieser Bereich ist geschützt.</p>
+                            <div style={{background: 'var(--bg-color)', padding: '30px', borderRadius: '12px', textAlign: 'center', border: '1px solid var(--border-color)'}}>
+                                <FaLock size={32} style={{color: 'var(--text-secondary)', marginBottom: '15px'}} />
+                                <p style={{color: 'var(--text-color)'}}>Dieser Bereich ist geschützt.</p>
                                 <div style={{display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '15px'}}>
                                     <input type="password" placeholder="Passwort" className="input-text" style={{width: '200px'}} value={dbPasswordInput} onChange={e => setDbPasswordInput(e.target.value)} />
                                     <button className="btn-save" onClick={handleDbUnlock}><FaUnlock /> Entsperren</button>
@@ -351,55 +440,55 @@ export const SettingsModal: React.FC<Props> = ({
                         ) : (
                             <div style={{animation: 'fadeIn 0.3s'}}>
                                 
-                                <div style={{marginBottom: '30px', padding: '20px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0'}}>
+                                <div style={{marginBottom: '30px', padding: '20px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.3)'}}>
                                     <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
-                                        <FaKey color="#16a34a" />
-                                        <span style={{fontWeight: 'bold', color: '#166534'}}>Sicherheit</span>
+                                        <FaKey color="#10b981" />
+                                        <span style={{fontWeight: 'bold', color: '#047857'}}>Sicherheit</span>
                                     </div>
                                     {hasPassword ? (
                                         <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
-                                            <span style={{color: '#166534'}}>Passwortschutz ist aktiv.</span>
+                                            <span style={{color: '#047857'}}>Passwortschutz ist aktiv.</span>
                                             <button className="btn-secondary" onClick={handleRemovePassword} style={{borderColor: '#ef4444', color: '#ef4444'}}>Schutz entfernen</button>
                                         </div>
                                     ) : (
                                         <div style={{display: 'flex', gap: '10px'}}>
                                             <input type="password" placeholder="Neues Passwort setzen" className="input-text" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
-                                            <button className="btn-save" onClick={handleSetPassword} style={{background: '#16a34a'}}>Aktivieren</button>
+                                            <button className="btn-save" onClick={handleSetPassword} style={{background: '#10b981'}}>Aktivieren</button>
                                         </div>
                                     )}
                                 </div>
 
                                 <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px'}}>
-                                    <div className="dashboard-card" style={{alignItems: 'flex-start'}}>
+                                    <div className="dashboard-card" style={{alignItems: 'flex-start', background: 'var(--bg-color)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border-color)'}}>
                                         <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
                                             <FaHdd size={24} color="#3b82f6" />
-                                            <span style={{fontWeight: 'bold'}}>Backup</span>
+                                            <span style={{fontWeight: 'bold', color: 'var(--text-color)'}}>Backup</span>
                                         </div>
-                                        <p style={{fontSize: '0.9rem', color: '#64748b', marginBottom: '15px'}}>Erstelle eine Kopie der gesamten Datenbank.</p>
+                                        <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '15px'}}>Erstelle eine Kopie der gesamten Datenbank.</p>
                                         <button className="btn-secondary" onClick={backupDatabase} style={{width: '100%'}}>Backup erstellen</button>
                                     </div>
 
-                                    <div className="dashboard-card" style={{alignItems: 'flex-start'}}>
+                                    <div className="dashboard-card" style={{alignItems: 'flex-start', background: 'var(--bg-color)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border-color)'}}>
                                         <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
                                             <FaUndo size={24} color="#f59e0b" />
-                                            <span style={{fontWeight: 'bold'}}>Wiederherstellen</span>
+                                            <span style={{fontWeight: 'bold', color: 'var(--text-color)'}}>Wiederherstellen</span>
                                         </div>
-                                        <p style={{fontSize: '0.9rem', color: '#64748b', marginBottom: '15px'}}>Lade ein Backup. ACHTUNG: Überschreibt alles!</p>
+                                        <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '15px'}}>Lade ein Backup. ACHTUNG: Überschreibt alles!</p>
                                         <button className="btn-secondary" onClick={restoreDatabase} style={{width: '100%'}}>Backup laden</button>
                                     </div>
 
-                                    <div className="dashboard-card" style={{alignItems: 'flex-start'}}>
+                                    <div className="dashboard-card" style={{alignItems: 'flex-start', background: 'var(--bg-color)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border-color)'}}>
                                         <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
                                             <FaFileExcel size={24} color="#10b981" />
-                                            <span style={{fontWeight: 'bold'}}>Log Export</span>
+                                            <span style={{fontWeight: 'bold', color: 'var(--text-color)'}}>Log Export</span>
                                         </div>
-                                        <p style={{fontSize: '0.9rem', color: '#64748b', marginBottom: '15px'}}>Exportiere ALLE rohen Activity-Logs als Excel.</p>
+                                        <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '15px'}}>Exportiere ALLE rohen Activity-Logs als Excel.</p>
                                         <button className="btn-secondary" onClick={() => db && exportAllLogsToExcel(db)} style={{width: '100%'}}>Logs exportieren</button>
                                     </div>
                                 </div>
 
                                 <h3 className="settings-h3" style={{color: '#ef4444'}}>Gefahrenzone</h3>
-                                <div style={{border: '1px solid #fee2e2', background: '#fef2f2', padding: '20px', borderRadius: '8px'}}>
+                                <div style={{border: '1px solid rgba(239, 68, 68, 0.3)', background: 'rgba(239, 68, 68, 0.1)', padding: '20px', borderRadius: '8px'}}>
                                     <p className="settings-desc" style={{color: '#b91c1c'}}>Löscht alle Logs, Zeiten und Einstellungen unwiderruflich.</p>
                                     <button onClick={() => { if(window.confirm("Wirklich ALLES löschen?")) onResetData(); }} style={{width: '100%', padding: '15px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer'}}>
                                         <FaTrash /> Datenbank zurücksetzen
@@ -412,34 +501,16 @@ export const SettingsModal: React.FC<Props> = ({
 
                 {activeTab === 'about' && (
                     <div style={{textAlign: 'center', padding: '40px'}}>
-                        <h2 style={{color: '#2c3e50', marginBottom: '10px'}}>ClockworkHero</h2>
-                        <div style={{fontSize: '1.2rem', color: '#64748b', marginBottom: '30px'}}>Version 0.9.1</div>
+                        <h2 style={{color: 'var(--text-color)', marginBottom: '10px'}}>ClockworkHero</h2>
+                        <div style={{fontSize: '1.2rem', color: 'var(--text-secondary)', marginBottom: '30px'}}>Version 0.9.2 Alpha</div>
                         
-                        <div style={{background: 'white', padding: '30px', borderRadius: '12px', border: '1px solid #e2e8f0', maxWidth: '600px', margin: '0 auto', textAlign: 'left'}}>
-                            <h4 style={{marginTop: 0}}>MIT License</h4>
-                            <p style={{fontSize: '0.9rem', color: '#475569', lineHeight: '1.6'}}>
+                        <div style={{background: 'var(--bg-color)', padding: '30px', borderRadius: '12px', border: '1px solid var(--border-color)', maxWidth: '600px', margin: '0 auto', textAlign: 'left'}}>
+                            <h4 style={{marginTop: 0, color: 'var(--text-color)'}}>MIT License</h4>
+                            <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.6'}}>
                                 Copyright (c) 2025 Sandro Ballarini
                             </p>
-                            <p style={{fontSize: '0.9rem', color: '#475569', lineHeight: '1.6'}}>
-                                Permission is hereby granted, free of charge, to any person obtaining a copy
-                                of this software and associated documentation files (the "Software"), to deal
-                                in the Software without restriction, including without limitation the rights
-                                to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-                                copies of the Software, and to permit persons to whom the Software is
-                                furnished to do so, subject to the following conditions:
-                            </p>
-                            <p style={{fontSize: '0.9rem', color: '#475569', lineHeight: '1.6'}}>
-                                The above copyright notice and this permission notice shall be included in all
-                                copies or substantial portions of the Software.
-                            </p>
-                            <p style={{fontSize: '0.9rem', color: '#475569', lineHeight: '1.6'}}>
-                                THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-                                IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-                                FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-                                AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-                                LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-                                OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-                                SOFTWARE.
+                            <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.6'}}>
+                                Permission is hereby granted, free of charge, to any person obtaining a copy...
                             </p>
                         </div>
                     </div>
@@ -459,7 +530,7 @@ export const SettingsModal: React.FC<Props> = ({
 };
 
 const TabButton = ({ icon, label, active, onClick }: any) => (
-    <div onClick={onClick} style={{padding: '15px 25px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', background: active ? 'white' : 'transparent', color: active ? '#2c3e50' : '#64748b', fontWeight: active ? '700' : '500', borderLeft: active ? '4px solid #3498db' : '4px solid transparent', transition: 'all 0.2s', fontSize: '0.95rem'}}>
+    <div onClick={onClick} style={{padding: '15px 25px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', background: active ? 'var(--panel-bg)' : 'transparent', color: active ? 'var(--text-color)' : 'var(--text-secondary)', fontWeight: active ? '700' : '500', borderLeft: active ? '4px solid #3498db' : '4px solid transparent', transition: 'all 0.2s', fontSize: '0.95rem'}}>
         {icon} {label}
     </div>
 );

@@ -5,6 +5,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import deLocale from '@fullcalendar/core/locales/de';
 import { renderEventContent } from './EventRenderer';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { DaySchedule } from '../types';
 
 interface Props {
   events: any[];
@@ -18,12 +19,14 @@ interface Props {
   workStart: string;
   workEnd: string;
   scrollTime: string;
+  hiddenDays?: number[];
+  weekSchedule?: DaySchedule[]; // NEU
 }
 
 export const CalendarEngine: React.FC<Props> = ({ 
     events, isEditMode, viewMode, 
     onDateSelect, onEventClick, onDeleteSession, onEventDrop, onEventResize, 
-    workStart, workEnd, scrollTime 
+    workStart, workEnd, scrollTime, hiddenDays, weekSchedule 
 }) => {
   
   const calendarRef = useRef<FullCalendar>(null);
@@ -43,11 +46,36 @@ export const CalendarEngine: React.FC<Props> = ({
   const handleNext = () => calendarRef.current?.getApi().next();
   const handleToday = () => calendarRef.current?.getApi().today();
 
-  const getScrollTime = () => {
-      if (!workStart) return "07:00:00";
-      const [h, m] = workStart.split(':').map(Number);
-      const newH = Math.max(0, h - 1);
-      return `${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
+  // Generiere Business Hours aus WeekSchedule
+  const getBusinessHours = () => {
+      if (!weekSchedule || weekSchedule.length === 0) {
+          // Fallback auf alte Settings
+          return {
+              daysOfWeek: [1, 2, 3, 4, 5],
+              startTime: workStart || '08:00',
+              endTime: workEnd || '17:00',
+          };
+      }
+
+      const hours = [];
+      // FullCalendar: 0=Sun, 1=Mon...
+      // Unser Array: 0=Mon, 1=Tue... 6=Sun
+      weekSchedule.forEach((day, idx) => {
+          if (day.isWorkday && day.blocks) {
+              // Mapping: Unser Index (0=Mon) -> FullCalendar (1=Mon)
+              // 0->1, 1->2, ..., 5->6, 6->0
+              const fcDayIndex = (idx + 1) % 7;
+              
+              day.blocks.forEach(block => {
+                  hours.push({
+                      daysOfWeek: [fcDayIndex],
+                      startTime: block.start,
+                      endTime: block.end
+                  });
+              });
+          }
+      });
+      return hours;
   };
 
   return (
@@ -55,7 +83,7 @@ export const CalendarEngine: React.FC<Props> = ({
         
         <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-            padding: '10px 20px', background: 'white', borderBottom: '1px solid #e2e8f0'
+            padding: '10px 20px', background: 'var(--panel-bg)', borderBottom: '1px solid var(--border-color)'
         }}>
             <div style={{display: 'flex', gap: '10px'}}>
                 <button onClick={handlePrev} style={navBtnStyle}><FaChevronLeft /></button>
@@ -79,16 +107,13 @@ export const CalendarEngine: React.FC<Props> = ({
                 weekends={true}
                 nowIndicator={true}
                 
-                scrollTime={scrollTime || getScrollTime()} // FIX: scrollTime nutzen
+                scrollTime={scrollTime}
                 slotMinTime="00:00:00"
                 slotMaxTime="24:00:00"
                 allDaySlot={false}
                 
-                businessHours={{
-                    daysOfWeek: [1, 2, 3, 4, 5],
-                    startTime: workStart || '08:00',
-                    endTime: workEnd || '17:00',
-                }}
+                hiddenDays={hiddenDays || []}
+                businessHours={getBusinessHours()} // NEU: Dynamisch
                 
                 height="100%"
                 slotDuration="00:15:00"
@@ -98,12 +123,7 @@ export const CalendarEngine: React.FC<Props> = ({
                 eventClick={onEventClick}
                 eventDrop={onEventDrop}
                 eventResize={onEventResize}
-                eventClassNames={(arg) => {
-                    // FIX: isEditMode nutzen, um Klasse zu setzen
-                    const classes = arg.event.extendedProps.type === 'auto' ? ['auto-event'] : ['manual-event'];
-                    if (isEditMode && arg.event.extendedProps.type === 'auto') classes.push('edit-mode-auto');
-                    return classes;
-                }}
+                eventClassNames={(arg) => arg.event.extendedProps.type === 'auto' ? ['auto-event'] : ['manual-event']}
             />
         </div>
     </div>
@@ -111,7 +131,7 @@ export const CalendarEngine: React.FC<Props> = ({
 };
 
 const navBtnStyle: React.CSSProperties = {
-    background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px',
-    padding: '8px', cursor: 'pointer', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+    background: 'var(--panel-bg)', border: '1px solid var(--border-color)', borderRadius: '6px',
+    padding: '8px', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    boxShadow: 'var(--shadow)'
 };

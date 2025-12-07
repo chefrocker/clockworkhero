@@ -27,7 +27,13 @@ function App() {
   
   const [isEditMode, setIsEditMode] = useState(false);
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'dashboard'>('day');
-  const [settings, setSettings] = useState<AppSettings>({ workStart: "08:00", workEnd: "17:00", theme: "light", groupingThreshold: 5, dailyTarget: 8 });
+  const [settings, setSettings] = useState<AppSettings>({ 
+      workStart: "08:00", 
+      workEnd: "17:00", 
+      theme: "light", 
+      groupingThreshold: 5, 
+      dailyTarget: 8 
+  });
   
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
@@ -46,6 +52,14 @@ function App() {
         setDb(database);
         const loadedSettings = await loadSettings(database);
         setSettings(loadedSettings);
+        
+        // Dark Mode beim Start anwenden
+        if (loadedSettings.darkMode) {
+            document.body.classList.add('dark-mode');
+        } else {
+            document.body.classList.remove('dark-mode');
+        }
+
         refreshData(database, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, loadedSettings.groupingThreshold);
       } catch (e) { console.error("DB Init Error:", e); }
     }
@@ -58,6 +72,7 @@ function App() {
       const title = info.title || "Unbekannt";
       const path = info.path || "";
       
+      // Wir speichern den Titel in der DB, brauchen ihn aber nicht im React State (verhindert unnötige Re-Renders)
       if (db && title !== lastSavedTitle.current && title !== "Unbekannt") {
         try {
             await logActiveWindow(db, title, path);
@@ -133,6 +148,14 @@ function App() {
       if (db) {
           await saveSettings(db, newSettings);
           setSettings(newSettings);
+          
+          // Dark Mode sofort anwenden
+          if (newSettings.darkMode) {
+              document.body.classList.add('dark-mode');
+          } else {
+              document.body.classList.remove('dark-mode');
+          }
+
           setShowSettings(false);
       }
   };
@@ -144,7 +167,7 @@ function App() {
       }
   };
 
-  // FIX: Typen angepasst für SettingsModal Callback ('app' | 'image')
+  // FIX: Explizite Typen für iconType ('app' | 'image'), damit TypeScript beim Build nicht meckert
   const handleUpdateProject = async (id: number, name: string, color: string, icon?: string, iconType?: 'app' | 'image') => {
       if (db) {
           await updateProject(db, id, name, color, icon, iconType);
@@ -159,7 +182,7 @@ function App() {
       }
   };
 
-  // FIX: Typen angepasst ('app' | 'image')
+  // FIX: Explizite Typen für iconType
   const handleAddProject = async (name: string, color: string, icon?: string, iconType?: 'app' | 'image') => {
       if (db && name) {
           await addProject(db, name, color, icon, iconType);
@@ -174,6 +197,7 @@ function App() {
         isOpen={showSessionModal}
         onClose={() => setShowSessionModal(false)}
         onSave={handleSaveSession}
+        onAddProject={handleAddProject}
         start={selection?.start || null}
         end={selection?.end || null}
         projects={projects}
@@ -207,12 +231,12 @@ function App() {
           {isEditMode ? 'Modus: Erfassung' : 'Modus: Analyse'}
         </div>
         <div className="header-controls">
-          <button onClick={() => setShowSettings(true)} style={{background: 'transparent', border: 'none', color: '#7f8c8d', cursor: 'pointer', padding: '8px'}} title="Einstellungen"><FaCog size={20} /></button>
+          <button onClick={() => setShowSettings(true)} style={{background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '8px'}} title="Einstellungen"><FaCog size={20} /></button>
           
-          <div style={{display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '2px', marginRight: '10px'}}>
-              <button onClick={() => setViewMode('day')} style={{background: viewMode === 'day' ? 'white' : 'transparent', boxShadow: viewMode === 'day' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: '#334155'}}><FaCalendarDay /> Tag</button>
-              <button onClick={() => setViewMode('week')} style={{background: viewMode === 'week' ? 'white' : 'transparent', boxShadow: viewMode === 'week' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: '#334155'}}><FaCalendarWeek /> Woche</button>
-              <button onClick={() => setViewMode('dashboard')} style={{background: viewMode === 'dashboard' ? 'white' : 'transparent', boxShadow: viewMode === 'dashboard' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: '#334155'}}><FaChartPie /> Auswertung</button>
+          <div style={{display: 'flex', background: 'var(--panel-bg)', borderRadius: '8px', padding: '2px', marginRight: '10px', border: '1px solid var(--border-color)'}}>
+              <button onClick={() => setViewMode('day')} style={{background: viewMode === 'day' ? 'var(--bg-color)' : 'transparent', boxShadow: viewMode === 'day' ? 'var(--shadow)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: 'var(--text-color)'}}><FaCalendarDay /> Tag</button>
+              <button onClick={() => setViewMode('week')} style={{background: viewMode === 'week' ? 'var(--bg-color)' : 'transparent', boxShadow: viewMode === 'week' ? 'var(--shadow)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: 'var(--text-color)'}}><FaCalendarWeek /> Woche</button>
+              <button onClick={() => setViewMode('dashboard')} style={{background: viewMode === 'dashboard' ? 'var(--bg-color)' : 'transparent', boxShadow: viewMode === 'dashboard' ? 'var(--shadow)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: 'var(--text-color)'}}><FaChartPie /> Auswertung</button>
           </div>
 
           <button className={`btn-toggle ${isEditMode ? 'active' : ''}`} onClick={() => setIsEditMode(!isEditMode)}>{isEditMode ? <FaSave /> : <FaPen />}{isEditMode ? 'Erfassung beenden' : 'Zeiten erfassen'}</button>
@@ -236,6 +260,8 @@ function App() {
               workStart={settings.workStart}
               workEnd={settings.workEnd}
               scrollTime={settings.workStart + ":00"}
+              hiddenDays={settings.hiddenDays}
+              weekSchedule={settings.weekSchedule}
             />
         )}
       </div>

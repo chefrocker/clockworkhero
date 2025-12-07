@@ -10,7 +10,6 @@ export interface Project {
     name: string;
     color: string;
     icon?: string;
-    // WICHTIG: Exakte Typisierung für TypeScript
     iconType?: 'app' | 'image';
 }
 
@@ -27,28 +26,36 @@ export interface WorkSession {
     end_time: string;
 }
 
+// NEU: Zeitblock für Arbeitszeiten
 export interface WorkTimeBlock {
   id: string;
-  start: string;
-  end: string;
+  start: string;  // z.B. "08:00"
+  end: string;    // z.B. "12:00"
 }
 
+// NEU: Arbeitszeiten pro Wochentag
 export interface DaySchedule {
-  dayName: string;
-  dayShort: string;
-  isWorkday: boolean;
+  dayName: string;        // "Montag", "Dienstag", etc.
+  dayShort: string;       // "Mo", "Di", etc.
+  isWorkday: boolean;     // Ist ein Arbeitstag?
   blocks: WorkTimeBlock[];
-  totalHours: number;
+  totalHours: number;     // Wird berechnet
 }
 
 export interface AppSettings {
-    workStart: string;
-    workEnd: string;
+    workStart: string; // Legacy (wird noch für Fallback genutzt)
+    workEnd: string;   // Legacy
+    
+    // NEU: Der komplexe Wochenplan
     weekSchedule?: DaySchedule[];
+
     dailyTarget?: number;
     theme: string;
     groupingThreshold: number;
     adminPassword?: string;
+    
+    darkMode?: boolean;
+    hiddenDays?: number[];
 }
 
 export interface ActivitySubEvent {

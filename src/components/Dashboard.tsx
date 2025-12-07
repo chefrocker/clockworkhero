@@ -89,6 +89,7 @@ export const Dashboard: React.FC<Props> = ({ db, projects }) => {
                     boxShadow: '0 4px 15px rgba(0,0,0,0.05)', marginBottom: '30px',
                     border: '1px solid #e2e8f0', animation: 'fadeIn 0.2s'
                 }}>
+                    {/* ... Filter Content ... */}
                     <div style={{display: 'flex', gap: '40px', flexWrap: 'wrap'}}>
                         <div style={{flex: 1, minWidth: '300px'}}>
                             <h4 style={{margin: '0 0 10px 0', color: '#475569'}}>Zeitraum</h4>
@@ -186,7 +187,8 @@ export const Dashboard: React.FC<Props> = ({ db, projects }) => {
                 
                 <div className="dashboard-panel">
                     <h3 className="panel-title">Verlauf</h3>
-                    <div style={{width: '100%', height: 300, minWidth: 0, minHeight: 0}}>
+                    {/* FIX: Feste Höhe und Breite 100% statt minWidth/minHeight */}
+                    <div style={{width: '100%', height: 300}}>
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={stats.history}>
                                 <defs>
@@ -207,7 +209,8 @@ export const Dashboard: React.FC<Props> = ({ db, projects }) => {
 
                 <div className="dashboard-panel">
                     <h3 className="panel-title">Verteilung (%)</h3>
-                    <div style={{width: '100%', height: 300, minWidth: 0, minHeight: 0}}>
+                    {/* FIX: Feste Höhe */}
+                    <div style={{width: '100%', height: 300}}>
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
