@@ -1,0 +1,269 @@
+import React, { useEffect, useState } from 'react';
+import Database from '@tauri-apps/plugin-sql';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area } from 'recharts';
+import { FaClock, FaCalendarAlt, FaArrowUp, FaArrowDown, FaMinus, FaChartLine, FaFilter, FaFileExcel, FaCheckSquare, FaSquare } from 'react-icons/fa';
+import { getDashboardStats, DashboardStats, DashboardFilter } from '../services/analyticsService';
+import { exportDashboardAnalysis } from '../services/exportService';
+import { Project } from '../types';
+
+interface Props {
+    db: Database | null;
+    projects: Project[];
+}
+
+export const Dashboard: React.FC<Props> = ({ db, projects }) => {
+    const [stats, setStats] = useState<DashboardStats | null>(null);
+    
+    // Filter State
+    const [startDate, setStartDate] = useState<string>("");
+    const [endDate, setEndDate] = useState<string>("");
+    const [selectedProjIds, setSelectedProjIds] = useState<number[]>([]);
+    const [showFilterMenu, setShowFilterMenu] = useState(false);
+
+    // Initiale Daten (Letzte 14 Tage)
+    useEffect(() => {
+        const end = new Date();
+        const start = new Date();
+        start.setDate(end.getDate() - 13);
+        setStartDate(start.toISOString().slice(0,10));
+        setEndDate(end.toISOString().slice(0,10));
+    }, []);
+
+    // Daten laden wenn Filter sich ändern
+    useEffect(() => {
+        if (db && startDate && endDate) {
+            const filter: DashboardFilter = {
+                start: new Date(startDate),
+                end: new Date(endDate),
+                projectIds: selectedProjIds
+            };
+            getDashboardStats(db, filter).then(setStats);
+        }
+    }, [db, startDate, endDate, selectedProjIds]);
+
+    const toggleProject = (id: number) => {
+        if (selectedProjIds.includes(id)) {
+            setSelectedProjIds(selectedProjIds.filter(pid => pid !== id));
+        } else {
+            setSelectedProjIds([...selectedProjIds, id]);
+        }
+    };
+
+    const handleExport = () => {
+        if (stats) exportDashboardAnalysis(stats);
+    };
+
+    const setRangeDays = (days: number) => {
+        const end = new Date();
+        const start = new Date();
+        start.setDate(end.getDate() - (days - 1));
+        setStartDate(start.toISOString().slice(0,10));
+        setEndDate(end.toISOString().slice(0,10));
+    };
+
+    if (!stats) return <div style={{padding: '40px', textAlign: 'center', color: '#94a3b8'}}>Lade Daten...</div>;
+
+    return (
+        <div style={{padding: '30px', height: '100%', overflowY: 'auto', background: '#f8fafc'}}>
+            
+            {/* HEADER */}
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px'}}>
+                <div>
+                    <h2 style={{margin: 0, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '10px'}}>
+                        <FaChartLine /> Dashboard
+                    </h2>
+                    <div style={{fontSize: '0.9rem', color: '#64748b', marginTop: '5px'}}>
+                        {stats.periodLabel} • {selectedProjIds.length === 0 ? "Alle Projekte" : `${selectedProjIds.length} Projekte ausgewählt`}
+                    </div>
+                </div>
+                
+                <div style={{display: 'flex', gap: '10px'}}>
+                    <button className="btn-secondary" onClick={() => setShowFilterMenu(!showFilterMenu)}>
+                        <FaFilter /> Filter & Zeitraum
+                    </button>
+                    <button className="btn-save" onClick={handleExport} style={{background: '#10b981'}}>
+                        <FaFileExcel /> Analyse Exportieren
+                    </button>
+                </div>
+            </div>
+
+            {/* FILTER MENU */}
+            {showFilterMenu && (
+                <div style={{
+                    background: 'white', padding: '20px', borderRadius: '12px', 
+                    boxShadow: '0 4px 15px rgba(0,0,0,0.05)', marginBottom: '30px',
+                    border: '1px solid #e2e8f0', animation: 'fadeIn 0.2s'
+                }}>
+                    <div style={{display: 'flex', gap: '40px', flexWrap: 'wrap'}}>
+                        <div style={{flex: 1, minWidth: '300px'}}>
+                            <h4 style={{margin: '0 0 10px 0', color: '#475569'}}>Zeitraum</h4>
+                            <div style={{display: 'flex', gap: '10px', marginBottom: '15px'}}>
+                                <button className="btn-secondary" onClick={() => setRangeDays(7)}>7 Tage</button>
+                                <button className="btn-secondary" onClick={() => setRangeDays(14)}>14 Tage</button>
+                                <button className="btn-secondary" onClick={() => setRangeDays(30)}>30 Tage</button>
+                            </div>
+                            <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                                <input type="date" className="input-text" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                                <span style={{color: '#94a3b8'}}>bis</span>
+                                <input type="date" className="input-text" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                            </div>
+                        </div>
+
+                        <div style={{flex: 1, minWidth: '300px'}}>
+                            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
+                                <h4 style={{margin: 0, color: '#475569'}}>Projekte filtern</h4>
+                                <button 
+                                    style={{background: 'none', border: 'none', color: '#3b82f6', fontSize: '0.8rem', padding: 0}}
+                                    onClick={() => setSelectedProjIds([])}
+                                >
+                                    Alle auswählen
+                                </button>
+                            </div>
+                            <div style={{display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '120px', overflowY: 'auto'}}>
+                                {projects.map(p => {
+                                    const isSelected = selectedProjIds.length === 0 || selectedProjIds.includes(p.id);
+                                    return (
+                                        <div 
+                                            key={p.id} 
+                                            onClick={() => toggleProject(p.id)}
+                                            style={{
+                                                padding: '6px 12px', borderRadius: '20px', fontSize: '0.85rem', cursor: 'pointer',
+                                                border: `1px solid ${isSelected ? p.color : '#e2e8f0'}`,
+                                                background: isSelected ? p.color : 'white',
+                                                color: isSelected ? 'white' : '#64748b',
+                                                display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s'
+                                            }}
+                                        >
+                                            {isSelected ? <FaCheckSquare size={12} /> : <FaSquare size={12} />}
+                                            {p.name}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* KPI CARDS */}
+            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px'}}>
+                <div className="dashboard-card">
+                    <div className="card-label">Gesamtzeit</div>
+                    <div className="card-value">{stats.totalHours} <span className="card-unit">Std</span></div>
+                    <div style={{fontSize: '0.8rem', color: '#94a3b8', marginTop: '5px'}}>
+                        Ø {stats.avgDaily} Std / Tag
+                    </div>
+                </div>
+                
+                {stats.projectDistribution.length > 0 && (
+                    <div className="dashboard-card" style={{borderLeft: `4px solid ${stats.projectDistribution[0].color}`}}>
+                        <div className="card-label">Hauptfokus</div>
+                        <div className="card-value" style={{fontSize: '1.4rem'}}>{stats.projectDistribution[0].name}</div>
+                        <div style={{fontSize: '1.2rem', color: stats.projectDistribution[0].color, fontWeight: 'bold', marginTop: '5px'}}>
+                            {stats.projectDistribution[0].percentage}% <span style={{fontSize: '0.8rem', color: '#94a3b8', fontWeight: 'normal'}}>der Zeit</span>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* TRENDS SECTION */}
+            <h3 className="section-title">Veränderungen (vs. vorheriger Zeitraum)</h3>
+            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '15px', marginBottom: '30px'}}>
+                {stats.trends.length === 0 && <div style={{color: '#94a3b8', fontStyle: 'italic'}}>Keine Daten für Vergleichszeitraum vorhanden.</div>}
+                {stats.trends.slice(0, 4).map((trend, idx) => (
+                    <div key={idx} style={{background: 'white', padding: '15px', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+                        <div>
+                            <div style={{fontWeight: '700', color: '#334155'}}>{trend.name}</div>
+                            <div style={{fontSize: '0.8rem', color: '#94a3b8'}}>{trend.currentHours} Std (war {trend.prevHours})</div>
+                        </div>
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 'bold',
+                            color: trend.changePercent > 0 ? '#10b981' : (trend.changePercent < 0 ? '#ef4444' : '#94a3b8'),
+                            background: trend.changePercent > 0 ? '#ecfdf5' : (trend.changePercent < 0 ? '#fef2f2' : '#f1f5f9'),
+                            padding: '4px 8px', borderRadius: '20px', fontSize: '0.85rem'
+                        }}>
+                            {trend.changePercent > 0 ? <FaArrowUp size={10} /> : (trend.changePercent < 0 ? <FaArrowDown size={10} /> : <FaMinus size={10} />)}
+                            {Math.abs(trend.changePercent)}%
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* CHARTS ROW */}
+            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px'}}>
+                
+                {/* CHART 1: VERLAUF */}
+                <div className="dashboard-panel">
+                    <h3 className="panel-title">Verlauf</h3>
+                    <div style={{width: '100%', height: 300}}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={stats.history}>
+                                <defs>
+                                    <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} dy={10} minTickGap={30} />
+                                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
+                                <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} />
+                                <Area type="monotone" dataKey="hours" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorHours)" />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* CHART 2: VERTEILUNG (DONUT) */}
+                <div className="dashboard-panel">
+                    <h3 className="panel-title">Verteilung (%)</h3>
+                    <div style={{width: '100%', height: 300}}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={stats.projectDistribution}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={100}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                >
+                                    {stats.projectDistribution.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                                    ))}
+                                </Pie>
+                                <Tooltip 
+                                    formatter={(value: number) => [`${value} Std`, 'Dauer']}
+                                    contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} 
+                                />
+                                <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+            </div>
+
+            <style>{`
+                .dashboard-card {
+                    background: white; padding: 20px; border-radius: 12px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                    display: flex; flex-direction: column; justify-content: center;
+                }
+                .card-label { font-size: 0.85rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+                .card-value { font-size: 2.2rem; font-weight: 800; color: #1e293b; line-height: 1; }
+                .card-unit { font-size: 1rem; color: #94a3b8; font-weight: 600; }
+                
+                .dashboard-panel {
+                    background: white; padding: 25px; border-radius: 12px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                }
+                .panel-title { margin: 0 0 20px 0; font-size: 1rem; color: #334155; font-weight: 700; }
+                .section-title { font-size: 0.9rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin: 20px 0 15px 0; }
+                
+                @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+            `}</style>
+        </div>
+    );
+};

@@ -178,3 +178,29 @@ button {
   bottom: 10% !important;
   opacity: 0.5 !important; /* Etwas sichtbarer */
 }
+/* ... bestehendes CSS ... */
+
+/* KALENDER ARBEITSZEITEN DESIGN */
+.fc-timegrid-slot {
+    height: 3em !important; /* Etwas höhere Zeilen für mehr Platz */
+}
+
+/* Arbeitszeit-Hintergrund (Business Hours) */
+.fc-business-container {
+    background-color: rgba(255, 250, 205, 0.4) !important; /* Zartes Gelb (LemonChiffon) */
+    pointer-events: none; /* Klicks gehen durch */
+}
+
+/* Nicht-Arbeitszeit (Standard Hintergrund ist meist weiß) */
+.fc .fc-timegrid-col-bg {
+    background: #ffffff;
+}
+
+/* Aktuelle Zeit Linie */
+.fc-now-indicator-line {
+    border-color: #ef4444 !important;
+    border-width: 2px !important;
+}
+.fc-now-indicator-arrow {
+    border-color: #ef4444 !important;
+}

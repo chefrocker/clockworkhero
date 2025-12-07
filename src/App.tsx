@@ -1,19 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import Database from '@tauri-apps/plugin-sql';
-import { FaPen, FaSave, FaBriefcase, FaFolderPlus, FaTrash, FaCalendarDay, FaCalendarWeek, FaCog } from 'react-icons/fa';
+import { FaPen, FaSave, FaBriefcase, FaFolderPlus, FaTrash, FaCalendarDay, FaCalendarWeek, FaCog, FaChartPie } from 'react-icons/fa';
 
 import { 
     initDatabase, logActiveWindow, loadAllEvents, loadProjects, 
     addProject, deleteProject, saveSession, deleteSession,
-    loadSettings, saveSetting, AppSettings,
-    exportSessionsToCSV, resetDatabase, updateProject
+    loadSettings, saveSettings, AppSettings, // WICHTIG: saveSettings (Plural)
+    resetDatabase, updateProject
 } from './services/db';
+
+import { exportSessionsToExcel } from './services/exportService';
 
 import { CalendarEngine } from './components/CalendarEngine';
 import { SessionModal } from './components/SessionModal';
 import { ActivityDetailModal } from './components/ActivityDetailModal';
 import { SettingsModal } from './components/SettingsModal';
+import { Dashboard } from './components/Dashboard';
 import { Project } from './types';
 import './App.css';
 
@@ -26,8 +29,8 @@ function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   
   const [isEditMode, setIsEditMode] = useState(false);
-  const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
-  const [settings, setSettings] = useState<AppSettings>({ workStart: "08:00", workEnd: "17:00", theme: "light", groupingThreshold: 5 });
+  const [viewMode, setViewMode] = useState<'day' | 'week' | 'dashboard'>('day');
+  const [settings, setSettings] = useState<AppSettings>({ workStart: "08:00", workEnd: "17:00", theme: "light", groupingThreshold: 5, dailyTarget: 8 });
   
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
@@ -46,7 +49,7 @@ function App() {
         setDb(database);
         const loadedSettings = await loadSettings(database);
         setSettings(loadedSettings);
-        refreshData(database, isEditMode, viewMode, loadedSettings.groupingThreshold);
+        refreshData(database, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, loadedSettings.groupingThreshold);
       } catch (e) { console.error("DB Init Error:", e); }
     }
     start();
@@ -69,14 +72,15 @@ function App() {
   }, [db]);
 
   useEffect(() => { 
-      if (db) refreshData(db, isEditMode, viewMode, settings.groupingThreshold); 
+      if (db && viewMode !== 'dashboard') {
+          refreshData(db, isEditMode, viewMode, settings.groupingThreshold); 
+      }
   }, [isEditMode, viewMode, settings.groupingThreshold]);
 
   async function refreshData(database: Database, editMode: boolean, currentView: 'day' | 'week', threshold: number) {
     const finalThreshold = currentView === 'week' ? 60 : threshold;
     const events = await loadAllEvents(database, editMode, finalThreshold);
     const projs = await loadProjects(database);
-    console.log('[App] 🔄 Projekte geladen:', projs); // DEBUG
     setCalendarEvents(events);
     setProjects(projs);
   }
@@ -109,7 +113,7 @@ function App() {
       const props = info.event.extendedProps;
       if (db && props.type === 'manual') {
           await saveSession(db, info.event.start, info.event.end, props.projectId, props.description, props.dbId);
-          refreshData(db, isEditMode, viewMode, settings.groupingThreshold);
+          refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold);
       }
   };
 
@@ -117,24 +121,21 @@ function App() {
     if (db) {
       await saveSession(db, start, end, projectId, desc, editingSessionId);
       setShowSessionModal(false);
-      refreshData(db, isEditMode, viewMode, settings.groupingThreshold);
+      refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold);
     }
   };
 
   const handleDeleteSession = async (id: string) => {
     if (db) {
       await deleteSession(db, id);
-      refreshData(db, isEditMode, viewMode, settings.groupingThreshold);
+      refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold);
     }
   };
 
-  // --- SETTINGS HANDLERS ---
-
   const handleSaveSettings = async (newSettings: AppSettings) => {
       if (db) {
-          await saveSetting(db, 'workStart', newSettings.workStart);
-          await saveSetting(db, 'workEnd', newSettings.workEnd);
-          await saveSetting(db, 'groupingThreshold', newSettings.groupingThreshold.toString());
+          // WICHTIG: Nutze die neue saveSettings Funktion für komplexe Objekte
+          await saveSettings(db, newSettings);
           setSettings(newSettings);
           setShowSettings(false);
       }
@@ -142,15 +143,7 @@ function App() {
 
   const handleExport = async () => {
       if (db) {
-          const csv = await exportSessionsToCSV(db);
-          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.setAttribute('download', `zeiterfassung_export_${new Date().toISOString().slice(0,10)}.csv`);
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
+          await exportSessionsToExcel(db);
       }
   };
 
@@ -161,40 +154,24 @@ function App() {
       }
   };
 
-  // 🔥 FIX: Icon + IconType Parameter hinzugefügt!
-  const handleUpdateProject = async (
-      id: number, 
-      name: string, 
-      color: string, 
-      icon?: string, 
-      iconType?: 'app' | 'image'
-  ) => {
+  const handleUpdateProject = async (id: number, name: string, color: string, icon?: string, iconType?: 'app' | 'image') => {
       if (db) {
-          console.log('[App] 💾 updateProject aufgerufen:', { id, name, color, icon: icon?.substring(0, 50) + '...', iconType }); // DEBUG
           await updateProject(db, id, name, color, icon, iconType);
-          refreshData(db, isEditMode, viewMode, settings.groupingThreshold);
+          refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold);
       }
   };
 
   const handleDeleteProject = async (id: number) => {
       if (db) {
-          console.log('[App] 🗑️ deleteProject:', id); // DEBUG
           await deleteProject(db, id);
-          refreshData(db, isEditMode, viewMode, settings.groupingThreshold);
+          refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold);
       }
   };
 
-  // 🔥 FIX: Icon + IconType Parameter hinzugefügt!
-  const handleAddProject = async (
-      name: string, 
-      color: string, 
-      icon?: string, 
-      iconType?: 'app' | 'image'
-  ) => {
+  const handleAddProject = async (name: string, color: string, icon?: string, iconType?: 'app' | 'image') => {
       if (db && name) {
-          console.log('[App] ➕ addProject aufgerufen:', { name, color, icon: icon?.substring(0, 50) + '...', iconType }); // DEBUG
           await addProject(db, name, color, icon, iconType);
-          refreshData(db, isEditMode, viewMode, settings.groupingThreshold);
+          refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold);
       }
   };
 
@@ -230,6 +207,7 @@ function App() {
         onAddProject={handleAddProject}
         onExportData={handleExport}
         onResetData={handleReset}
+        db={db}
       />
 
       <div className="app-header">
@@ -239,27 +217,37 @@ function App() {
         </div>
         <div className="header-controls">
           <button onClick={() => setShowSettings(true)} style={{background: 'transparent', border: 'none', color: '#7f8c8d', cursor: 'pointer', padding: '8px'}} title="Einstellungen"><FaCog size={20} /></button>
+          
           <div style={{display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '2px', marginRight: '10px'}}>
               <button onClick={() => setViewMode('day')} style={{background: viewMode === 'day' ? 'white' : 'transparent', boxShadow: viewMode === 'day' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: '#334155'}}><FaCalendarDay /> Tag</button>
               <button onClick={() => setViewMode('week')} style={{background: viewMode === 'week' ? 'white' : 'transparent', boxShadow: viewMode === 'week' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: '#334155'}}><FaCalendarWeek /> Woche</button>
+              <button onClick={() => setViewMode('dashboard')} style={{background: viewMode === 'dashboard' ? 'white' : 'transparent', boxShadow: viewMode === 'dashboard' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: '#334155'}}><FaChartPie /> Auswertung</button>
           </div>
+
           <button className={`btn-toggle ${isEditMode ? 'active' : ''}`} onClick={() => setIsEditMode(!isEditMode)}>{isEditMode ? <FaSave /> : <FaPen />}{isEditMode ? 'Erfassung beenden' : 'Zeiten erfassen'}</button>
-          <button className="btn-refresh" onClick={() => db && refreshData(db, isEditMode, viewMode, settings.groupingThreshold)}>Refresh</button>
+          <button className="btn-refresh" onClick={() => db && refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold)}>Refresh</button>
         </div>
       </div>
 
       <div className="calendar-wrapper">
-        <CalendarEngine 
-          events={calendarEvents}
-          isEditMode={isEditMode}
-          viewMode={viewMode}
-          onDateSelect={handleDateSelect}
-          onEventClick={handleEventClick}
-          onDeleteSession={handleDeleteSession}
-          onEventDrop={handleEventChange}
-          onEventResize={handleEventChange}
-          scrollTime={settings.workStart + ":00"}
-        />
+        {viewMode === 'dashboard' ? (
+            <Dashboard db={db} projects={projects} />
+        ) : (
+            <CalendarEngine 
+              events={calendarEvents}
+              isEditMode={isEditMode}
+              viewMode={viewMode}
+              onDateSelect={handleDateSelect}
+              onEventClick={handleEventClick}
+              onDeleteSession={handleDeleteSession}
+              onEventDrop={handleEventChange}
+              onEventResize={handleEventChange}
+              // NEU: Settings übergeben
+              workStart={settings.workStart}
+              workEnd={settings.workEnd}
+              scrollTime={settings.workStart + ":00"}
+            />
+        )}
       </div>
     </div>
   );

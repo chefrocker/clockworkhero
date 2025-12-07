@@ -9,6 +9,8 @@ export interface Project {
   id: number;
   name: string;
   color: string;
+  icon?: string; // NEU: Kann ein App-Name ("Code") oder Base64-Bild sein
+  iconType?: 'app' | 'image'; // NEU: Zur Unterscheidung
 }
 
 export interface ColorEntry {
@@ -29,12 +31,12 @@ export interface ActivitySubEvent {
   title: string;
 }
 
-// NEU: Erweiterte Einstellungen
 export interface AppSettings {
   workStart: string;      // "08:00"
   workEnd: string;        // "17:00"
+  dailyTarget: number;    // NEU: Stunden pro Tag (z.B. 8)
   theme: string;          // "light"
-  groupingThreshold: number; // Minuten (z.B. 5 oder 15)
+  groupingThreshold: number; 
 }
 
 export interface CalendarEvent {
@@ -47,16 +49,23 @@ export interface CalendarEvent {
   extendedProps: {
     type: 'auto' | 'manual';
     order: number;
+    
+    // Auto
     fullTitle?: string;
     exePath?: string;
     appColor?: string;
     simpleName?: string;
     subEvents?: ActivitySubEvent[];
+    
+    // Manual
     dbId?: number;
     projectId?: number | null;
     projectName?: string;
     projectColor?: string;
+    projectIcon?: string; // NEU
+    projectIconType?: 'app' | 'image'; // NEU
     description?: string;
+    
     isEditMode?: boolean;
   };
 }

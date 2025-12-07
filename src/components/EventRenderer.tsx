@@ -1,47 +1,43 @@
 import React from 'react';
+import { createRoot } from 'react-dom/client'; // WICHTIG für React 18 Rendering in FullCalendar
 import { FaTrash } from 'react-icons/fa';
 import { AppIcon } from './AppIcon';
 import { hexToRgba } from '../utils/imageUtils';
 
-interface Props {
-  eventInfo: any;
-  onDeleteSession: (id: string) => void;
-}
+// FullCalendar erwartet DOM Nodes oder JSX. 
+// Da wir Hooks/Context in der Komponente nutzen wollen, ist es sauberer, eine echte React Komponente zu rendern.
+// Aber FullCalendar's `eventContent` Hook ist etwas speziell.
+// Wir geben hier direkt JSX zurück, das FullCalendar rendert.
 
-export const EventRenderer: React.FC<Props> = ({ eventInfo, onDeleteSession }) => {
+export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string) => void) => {
   const props = eventInfo.event.extendedProps;
   const isEditMode = props.isEditMode;
 
-  // --- LAYER 1: SESSIONS (Manuell - Vordergrund) ---
-  // NEUES DESIGN: Premium Gradient Card
+  // --- LAYER 1: SESSIONS (Manuell) ---
   if (props.type === 'manual') {
-    
     const baseColor = props.projectColor || '#3498db';
-    // Wir erstellen einen Verlauf von der Basisfarbe zu einer etwas helleren/transparenteren Version
     const gradient = `linear-gradient(135deg, ${hexToRgba(baseColor, 0.95)} 0%, ${hexToRgba(baseColor, 0.8)} 100%)`;
     
     return (
       <div className="manual-session-block" style={{ 
           background: gradient,
-          borderRadius: '10px',
-          // Subtiler weißer Rand für "Glass"-Kante
+          borderRadius: '6px',
           border: '1px solid rgba(255,255,255,0.2)',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.1)',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
           color: 'white',
-          padding: '6px 10px',
+          padding: '4px 8px',
           overflow: 'hidden',
           position: 'relative',
           height: '100%',
-          transition: 'transform 0.1s, box-shadow 0.1s'
+          transition: 'transform 0.1s',
+          pointerEvents: 'auto'
       }}>
-        
-        {/* Watermark Icon (Groß & Künstlerisch) */}
         <div style={{
-            position: 'absolute', right: '-12px', bottom: '-12px', 
+            position: 'absolute', right: '-10px', bottom: '-10px', 
             opacity: 0.15, transform: 'rotate(-15deg)',
-            width: '64px', height: '64px', pointerEvents: 'none',
+            width: '50px', height: '50px', pointerEvents: 'none',
             display: 'flex', justifyContent: 'center', alignItems: 'center',
-            filter: 'grayscale(100%) brightness(200%)' // Macht das Icon weißlich
+            filter: 'grayscale(100%) brightness(200%)'
         }}>
             {props.projectIconType === 'image' ? (
                 <img src={props.projectIcon} alt="" style={{width: '100%', height: '100%', objectFit: 'contain'}} />
@@ -50,32 +46,33 @@ export const EventRenderer: React.FC<Props> = ({ eventInfo, onDeleteSession }) =
             )}
         </div>
 
-        <div className="manual-session-header" style={{position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-            <span className="manual-session-title" style={{
-                color: 'white', fontWeight: '800', fontSize: '0.9rem',
-                textShadow: '0 1px 2px rgba(0,0,0,0.2)', letterSpacing: '0.3px'
-            }}>
+        <div style={{position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+            <span style={{fontWeight: '700', fontSize: '0.85rem', textShadow: '0 1px 2px rgba(0,0,0,0.2)'}}>
                 {props.projectName}
             </span>
             {isEditMode && (
-                <button 
-                    className="btn-delete-session" 
+                // Wir nutzen hier ein data-attribute oder stopPropagation im Wrapper, 
+                // da onClick Events in FullCalendar manchmal tricky sind.
+                // Aber React Events sollten durchgereicht werden.
+                <div 
                     style={{
                         background: 'rgba(255,255,255,0.2)', color: 'white', 
-                        width: '22px', height: '22px', minWidth: '22px',
-                        borderRadius: '6px', border: 'none', cursor: 'pointer',
+                        width: '20px', height: '20px', borderRadius: '4px', cursor: 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'center'
                     }}
-                    onMouseDown={(e) => { e.stopPropagation(); onDeleteSession(eventInfo.event.id); }}
+                    onClick={(e) => { 
+                        e.stopPropagation(); // Verhindert Event-Click des Kalenders
+                        onDeleteSession(eventInfo.event.id); 
+                    }}
                 >
-                    <FaTrash size={10} />
-                </button>
+                    <FaTrash size={9} />
+                </div>
             )}
         </div>
         
-        <div className="manual-session-desc" style={{
-            color: 'rgba(255,255,255,0.9)', fontSize: '0.8rem', fontWeight: '500',
-            position: 'relative', zIndex: 2, marginTop: '3px',
+        <div style={{
+            color: 'rgba(255,255,255,0.9)', fontSize: '0.75rem', fontWeight: '500',
+            position: 'relative', zIndex: 2, marginTop: '2px',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
         }}>
           {props.description}
@@ -84,7 +81,7 @@ export const EventRenderer: React.FC<Props> = ({ eventInfo, onDeleteSession }) =
     );
   }
 
-  // --- LAYER 2: ACTIVITY STREAM (Auto - Hintergrund) ---
+  // --- LAYER 2: ACTIVITY STREAM (Auto) ---
   const containerStyle: React.CSSProperties = {
     backgroundColor: isEditMode ? 'rgba(245, 245, 245, 0.5)' : 'rgba(255, 255, 255, 0.6)',
     borderLeft: `3px solid ${props.appColor}`,
@@ -96,28 +93,28 @@ export const EventRenderer: React.FC<Props> = ({ eventInfo, onDeleteSession }) =
     position: 'relative',
     overflow: 'hidden',
     height: '100%',
-    borderRadius: '0 4px 4px 0',
-    borderTop: '1px solid rgba(0,0,0,0.03)',
-    borderBottom: '1px solid rgba(0,0,0,0.03)',
-    borderRight: '1px solid rgba(0,0,0,0.03)',
+    borderRadius: '6px',
+    border: '1px solid rgba(0,0,0,0.05)',
   };
 
   return (
     <div style={containerStyle}>
       {!isEditMode && (
         <div style={{
-            position: 'absolute', top: '2px', left: '4px', zIndex: 2,
-            fontSize: '0.7rem', fontWeight: '600', color: '#64748b',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '85%'
+            position: 'absolute', top: '4px', left: '6px', zIndex: 2,
+            fontSize: '0.75rem', fontWeight: '600', color: '#475569',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '90%'
         }}>
             {props.simpleName}
         </div>
       )}
       <div style={{
-          position: 'absolute', right: '5%', bottom: '5%', width: '50%', height: '70%', 
-          opacity: 0.8, display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', zIndex: 1
+          position: 'absolute', right: '5px', bottom: '5px', 
+          opacity: 0.15, transform: 'rotate(-10deg)',
+          width: '32px', height: '32px', pointerEvents: 'none',
+          display: 'flex', justifyContent: 'center', alignItems: 'center'
       }}>
-        <AppIcon path={props.exePath} appName={props.simpleName} fallbackColor={props.appColor} className="watermark-icon" />
+        <AppIcon path={props.exePath} appName={props.simpleName} fallbackColor={props.appColor} />
       </div>
     </div>
   );

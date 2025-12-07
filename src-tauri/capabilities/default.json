@@ -8,6 +8,24 @@
     "sql:default",
     "sql:allow-load",
     "sql:allow-execute",
-    "sql:allow-select"
+    "sql:allow-select",
+    "opener:default",
+    "dialog:default",
+    "dialog:allow-save",
+    "dialog:allow-message",
+    "dialog:allow-open",
+    "fs:default",
+    "fs:allow-write-text-file",
+    "fs:allow-write-file",
+    "fs:allow-read-file",
+    "fs:allow-create",
+    "fs:allow-copy-file",
+    "fs:allow-exists",
+    "fs:allow-remove",
+    "fs:allow-rename",
+    
+    "fs:allow-appdata-read-recursive",
+    "fs:allow-appdata-write-recursive",
+    "fs:scope-appdata-recursive"
   ]
 }

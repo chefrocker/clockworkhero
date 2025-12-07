@@ -1,45 +1,39 @@
 import React from 'react';
 import { FaTrash } from 'react-icons/fa';
 import { AppIcon } from './AppIcon';
-// WICHTIG: Der Import muss genau so aussehen:
 import { hexToRgba } from '../utils/imageUtils';
 
-interface Props {
-  eventInfo: any;
-  onDeleteSession: (id: string) => void;
-}
-
-export const EventRenderer: React.FC<Props> = ({ eventInfo, onDeleteSession }) => {
+export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string) => void) => {
   const props = eventInfo.event.extendedProps;
   const isEditMode = props.isEditMode;
 
-  // --- LAYER 1: SESSIONS (Manuell - Vordergrund) ---
+  // --- LAYER 1: SESSIONS (Manuell) ---
   if (props.type === 'manual') {
-    
-    // Nutzung der Helper-Funktion
-    const bgColor = hexToRgba(props.projectColor || '#3498db', 0.85); 
+    const baseColor = props.projectColor || '#3498db';
+    const gradient = `linear-gradient(135deg, ${hexToRgba(baseColor, 0.95)} 0%, ${hexToRgba(baseColor, 0.8)} 100%)`;
     
     return (
       <div className="manual-session-block" style={{ 
-          backgroundColor: bgColor, 
-          borderLeft: `4px solid ${props.projectColor}`, 
-          borderRadius: '8px',
-          boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-          backdropFilter: 'blur(4px)', 
+          background: gradient,
+          borderRadius: '6px',
+          border: '1px solid rgba(255,255,255,0.2)',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
           color: 'white',
-          padding: '6px 10px',
+          padding: '4px 8px',
           overflow: 'hidden',
           position: 'relative',
           height: '100%',
-          transition: 'transform 0.1s'
+          transition: 'transform 0.1s',
+          pointerEvents: 'auto'
       }}>
-        
-        {/* Projekt Icon im Hintergrund */}
+        {/* Wasserzeichen für Manuelle Sessions */}
         <div style={{
             position: 'absolute', right: '-5px', bottom: '-5px', 
-            opacity: 0.25, transform: 'rotate(-10deg)',
-            width: '50px', height: '50px', pointerEvents: 'none',
-            display: 'flex', justifyContent: 'center', alignItems: 'center'
+            opacity: 0.2, transform: 'rotate(-10deg)',
+            width: '40px', height: '40px', pointerEvents: 'none',
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            filter: 'grayscale(100%) brightness(200%)',
+            zIndex: 1
         }}>
             {props.projectIconType === 'image' ? (
                 <img src={props.projectIcon} alt="" style={{width: '100%', height: '100%', objectFit: 'contain'}} />
@@ -48,26 +42,29 @@ export const EventRenderer: React.FC<Props> = ({ eventInfo, onDeleteSession }) =
             )}
         </div>
 
-        <div className="manual-session-header" style={{position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'space-between'}}>
-            <span className="manual-session-title" style={{
-                color: 'white', fontWeight: '700', fontSize: '0.9rem',
-                textShadow: '0 1px 2px rgba(0,0,0,0.3)'
-            }}>
+        <div style={{position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+            <span style={{fontWeight: '700', fontSize: '0.85rem', textShadow: '0 1px 2px rgba(0,0,0,0.2)'}}>
                 {props.projectName}
             </span>
             {isEditMode && (
-                <button 
-                    className="btn-delete-session" 
-                    style={{background: 'rgba(0,0,0,0.2)', color: 'white', width: '20px', height: '20px', minWidth: '20px'}}
-                    onMouseDown={(e) => { e.stopPropagation(); onDeleteSession(eventInfo.event.id); }}
+                <div 
+                    style={{
+                        background: 'rgba(255,255,255,0.2)', color: 'white', 
+                        width: '20px', height: '20px', borderRadius: '4px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}
+                    onClick={(e) => { 
+                        e.stopPropagation(); 
+                        onDeleteSession(eventInfo.event.id); 
+                    }}
                 >
                     <FaTrash size={9} />
-                </button>
+                </div>
             )}
         </div>
         
-        <div className="manual-session-desc" style={{
-            color: 'rgba(255,255,255,0.95)', fontSize: '0.8rem', 
+        <div style={{
+            color: 'rgba(255,255,255,0.9)', fontSize: '0.75rem', fontWeight: '500',
             position: 'relative', zIndex: 2, marginTop: '2px',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
         }}>
@@ -77,7 +74,7 @@ export const EventRenderer: React.FC<Props> = ({ eventInfo, onDeleteSession }) =
     );
   }
 
-  // --- LAYER 2: ACTIVITY STREAM (Auto - Hintergrund) ---
+  // --- LAYER 2: ACTIVITY STREAM (Auto) ---
   const containerStyle: React.CSSProperties = {
     backgroundColor: isEditMode ? 'rgba(245, 245, 245, 0.5)' : 'rgba(255, 255, 255, 0.6)',
     borderLeft: `3px solid ${props.appColor}`,
@@ -89,28 +86,32 @@ export const EventRenderer: React.FC<Props> = ({ eventInfo, onDeleteSession }) =
     position: 'relative',
     overflow: 'hidden',
     height: '100%',
-    borderRadius: '0 4px 4px 0',
-    borderTop: '1px solid rgba(0,0,0,0.03)',
-    borderBottom: '1px solid rgba(0,0,0,0.03)',
-    borderRight: '1px solid rgba(0,0,0,0.03)',
+    borderRadius: '6px',
+    border: '1px solid rgba(0,0,0,0.05)',
   };
 
   return (
     <div style={containerStyle}>
       {!isEditMode && (
         <div style={{
-            position: 'absolute', top: '2px', left: '4px', zIndex: 2,
-            fontSize: '0.7rem', fontWeight: '600', color: '#64748b',
+            position: 'absolute', top: '4px', left: '6px', zIndex: 2,
+            fontSize: '0.75rem', fontWeight: '600', color: '#475569',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '85%'
         }}>
             {props.simpleName}
         </div>
       )}
+      
+      {/* WASSERZEICHEN (Auto) - FIX: zIndex erhöht und Position angepasst */}
       <div style={{
-          position: 'absolute', right: '5%', bottom: '5%', width: '50%', height: '70%', 
-          opacity: 0.8, display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', zIndex: 1
+          position: 'absolute', right: '4px', bottom: '4px', 
+          opacity: 0.5, // Etwas sichtbarer machen
+          width: '24px', height: '24px', 
+          pointerEvents: 'none',
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
+          zIndex: 1
       }}>
-        <AppIcon path={props.exePath} appName={props.simpleName} fallbackColor={props.appColor} className="watermark-icon" />
+        <AppIcon path={props.exePath} appName={props.simpleName} fallbackColor={props.appColor} />
       </div>
     </div>
   );

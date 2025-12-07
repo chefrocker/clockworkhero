@@ -1,0 +1,107 @@
+import Database from '@tauri-apps/plugin-sql';
+
+export interface DashboardStats {
+    totalHours: number;
+    avgDaily: number;
+    projectDistribution: { name: string, value: number, color: string, percentage: number }[];
+    trends: { name: string, changePercent: number, currentHours: number, prevHours: number, color: string }[];
+    history: { name: string, hours: number }[];
+}
+
+export async function getDashboardStats(db: Database, days: number): Promise<DashboardStats> {
+    const now = new Date();
+    
+    // Zeitraum 1: Aktuell (z.B. letzte 14 Tage)
+    const startCurrent = new Date();
+    startCurrent.setDate(now.getDate() - days);
+    startCurrent.setHours(0,0,0,0);
+
+    // Zeitraum 2: Vergleich (z.B. die 14 Tage DAVOR)
+    const startPrev = new Date();
+    startPrev.setDate(now.getDate() - (days * 2));
+    startPrev.setHours(0,0,0,0);
+
+    // Wir laden alle Sessions ab dem Vergleichszeitraum
+    const sessions = await db.select<any[]>(`
+        SELECT ws.start_time, ws.end_time, p.name as project_name, p.color
+        FROM work_sessions ws
+        LEFT JOIN projects p ON ws.project_id = p.id
+        WHERE ws.end_time >= $1
+    `, [startPrev.toISOString()]);
+
+    const currentMap = new Map<string, {hours: number, color: string}>();
+    const prevMap = new Map<string, number>();
+    const historyMap = new Map<string, number>();
+    let totalCurrentHours = 0;
+
+    sessions.forEach(s => {
+        const start = new Date(s.start_time);
+        const end = new Date(s.end_time);
+        const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+        const name = s.project_name || "Ohne Projekt";
+        const color = s.color || "#94a3b8";
+
+        // Ist es im aktuellen Zeitraum?
+        if (start >= startCurrent) {
+            totalCurrentHours += hours;
+            
+            // Für Projekt-Verteilung
+            if (!currentMap.has(name)) currentMap.set(name, {hours: 0, color});
+            currentMap.get(name)!.hours += hours;
+
+            // Für History-Chart (Tage)
+            const dayKey = start.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+            historyMap.set(dayKey, (historyMap.get(dayKey) || 0) + hours);
+        } 
+        // Oder im Vergleichszeitraum (für Trends)?
+        else if (start >= startPrev) {
+            prevMap.set(name, (prevMap.get(name) || 0) + hours);
+        }
+    });
+
+    // 1. Verteilung & Prozent
+    const projectDistribution = Array.from(currentMap.entries()).map(([name, data]) => ({
+        name,
+        value: parseFloat(data.hours.toFixed(1)),
+        color: data.color,
+        percentage: totalCurrentHours > 0 ? Math.round((data.hours / totalCurrentHours) * 100) : 0
+    })).sort((a, b) => b.value - a.value);
+
+    // 2. Trends berechnen (Vergleich Current vs Prev)
+    const trends = Array.from(currentMap.entries()).map(([name, data]) => {
+        const prevHours = prevMap.get(name) || 0;
+        let changePercent = 0;
+        
+        if (prevHours === 0 && data.hours > 0) changePercent = 100; // Neu dazu
+        else if (data.hours === 0) changePercent = -100; // Weggefallen
+        else changePercent = Math.round(((data.hours - prevHours) / prevHours) * 100);
+
+        return {
+            name,
+            changePercent,
+            currentHours: parseFloat(data.hours.toFixed(1)),
+            prevHours: parseFloat(prevHours.toFixed(1)),
+            color: data.color
+        };
+    }).sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent)); // Sortiert nach stärkster Veränderung
+
+    // 3. History Array füllen (Lücken füllen für schöne Charts)
+    const history = [];
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(now.getDate() - i);
+        const key = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+        history.push({
+            name: key,
+            hours: parseFloat((historyMap.get(key) || 0).toFixed(1))
+        });
+    }
+
+    return {
+        totalHours: parseFloat(totalCurrentHours.toFixed(1)),
+        avgDaily: parseFloat((totalCurrentHours / days).toFixed(1)),
+        projectDistribution,
+        trends,
+        history
+    };
+}

@@ -1,71 +1,61 @@
 export interface LogEntry {
-  id: number;
-  title: string;
-  exe_path?: string;
-  created_at: string;
+    id: number;
+    title: string;
+    exe_path: string;
+    created_at: string;
 }
 
 export interface Project {
-  id: number;
-  name: string;
-  color: string;
-  icon?: string; // NEU: Kann ein App-Name ("Code") oder Base64-Bild sein
-  iconType?: 'app' | 'image'; // NEU: Zur Unterscheidung
+    id: number;
+    name: string;
+    color: string;
+    icon?: string;
+    iconType?: 'app' | 'image';
 }
 
 export interface ColorEntry {
-  name: string;
-  color: string;
+    name: string;
+    color: string;
 }
 
 export interface WorkSession {
-  id: number;
-  project_id: number | null;
-  description: string;
-  start_time: string;
-  end_time: string;
+    id: number;
+    project_id: number;
+    description: string;
+    start_time: string;
+    end_time: string;
 }
 
-export interface ActivitySubEvent {
-  time: string;
-  title: string;
+// NEU: Zeitblock für Arbeitszeiten
+export interface WorkTimeBlock {
+  id: string;
+  start: string;  // z.B. "08:00"
+  end: string;    // z.B. "12:00"
+}
+
+// NEU: Arbeitszeiten pro Wochentag
+export interface DaySchedule {
+  dayName: string;        // "Montag", "Dienstag", etc.
+  dayShort: string;       // "Mo", "Di", etc.
+  isWorkday: boolean;     // Ist ein Arbeitstag?
+  blocks: WorkTimeBlock[];
+  totalHours: number;     // Wird berechnet
 }
 
 export interface AppSettings {
-  workStart: string;      // "08:00"
-  workEnd: string;        // "17:00"
-  dailyTarget: number;    // NEU: Stunden pro Tag (z.B. 8)
-  theme: string;          // "light"
-  groupingThreshold: number; 
+    workStart: string; // Legacy, wird aber noch gebraucht bis Migration durch ist
+    workEnd: string;   // Legacy
+    
+    // NEU: Wochenplan
+    weekSchedule?: DaySchedule[];
+
+    dailyTarget?: number;
+    theme: string;
+    groupingThreshold: number;
+    adminPassword?: string;
 }
 
-export interface CalendarEvent {
-  id: string;
-  title: string;
-  start: Date;
-  end: Date;
-  display?: string;
-  backgroundColor?: string;
-  extendedProps: {
-    type: 'auto' | 'manual';
-    order: number;
-    
-    // Auto
-    fullTitle?: string;
-    exePath?: string;
-    appColor?: string;
-    simpleName?: string;
-    subEvents?: ActivitySubEvent[];
-    
-    // Manual
-    dbId?: number;
-    projectId?: number | null;
-    projectName?: string;
-    projectColor?: string;
-    projectIcon?: string; // NEU
-    projectIconType?: 'app' | 'image'; // NEU
-    description?: string;
-    
-    isEditMode?: boolean;
-  };
+export interface ActivitySubEvent {
+    time: string;
+    title: string;
 }
