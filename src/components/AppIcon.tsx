@@ -1,77 +1,64 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { IconType } from 'react-icons';
 import { 
-    FaChrome, FaFirefox, FaEdge, FaOpera, FaSafari,
-    FaWindows, FaApple, FaLinux, 
-    FaSpotify, FaDiscord, FaSlack, FaWhatsapp, FaTelegram,
-    FaFileWord, FaFileExcel, FaFilePowerpoint, FaFilePdf, 
-    FaCode, FaTerminal, FaGitAlt, FaFolderOpen, FaCog, FaCalculator, FaCamera,
-    FaUsers, FaImage, FaPlayCircle
+    FaChrome, FaFirefox, FaEdge, FaOpera, 
+    FaSpotify, FaDiscord, FaSlack, FaWhatsapp, 
+    FaCode, FaFolderOpen, FaCog, FaCalculator, FaCamera,
+    FaQuestion
 } from 'react-icons/fa';
-import { VscCode, VscTerminal } from 'react-icons/vsc';
-import { SiMicrosoftteams, SiAdobephotoshop, SiIntellijidea, SiVlc, SiNotion, SiPostman } from 'react-icons/si';
+
+// Nur verfügbare Icons importieren
+import { SiAdobephotoshop, SiIntellijidea, SiNotion, SiPostman } from 'react-icons/si';
 
 interface Props {
-  path?: string;      
-  appName?: string;   
-  fallbackColor: string;
+  appName?: string;
+  path?: string;
+  fallbackColor?: string;
   className?: string;
 }
 
-const iconCache = new Map<string, string>();
-
-const ICON_MAP: Record<string, IconType> = {
-  'chrome': FaChrome, 'google chrome': FaChrome, 'firefox': FaFirefox, 'edge': FaEdge, 'opera': FaOpera,
-  'word': FaFileWord, 'excel': FaFileExcel, 'powerpoint': FaFilePowerpoint, 'outlook': FaFileWord,
-  'teams': FaUsers, 'pdf': FaFilePdf,
-  'code': VscCode, 'vscode': VscCode, 'visual studio': VscCode, 'intellij': SiIntellijidea,
-  'terminal': VscTerminal, 'powershell': VscTerminal, 'cmd': VscTerminal, 'git': FaGitAlt,
-  'spotify': FaSpotify, 'discord': FaDiscord, 'slack': FaSlack, 'whatsapp': FaWhatsapp,
-  'vlc': FaPlayCircle, 'photoshop': FaImage, 'explorer': FaFolderOpen, 'settings': FaCog
-};
-
-export const AppIcon: React.FC<Props> = ({ path, appName, fallbackColor, className }) => {
-  const [realIconSrc, setRealIconSrc] = useState<string | null>(null);
+export const AppIcon: React.FC<Props> = ({ appName, path, fallbackColor, className }) => {
+  const [iconSrc, setIconSrc] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!path) return;
-    if (iconCache.has(path)) {
-        setRealIconSrc(iconCache.get(path)!);
-        return;
-    }
     let isMounted = true;
-    const timer = setTimeout(() => {
-        invoke<string>('get_exe_icon', { path })
-        .then((base64) => {
-            if (isMounted && base64 && base64.length > 50) {
-                iconCache.set(path, base64);
-                setRealIconSrc(base64);
-            }
-        })
-        .catch(() => {});
-    }, 10);
-    return () => { isMounted = false; clearTimeout(timer); };
+    if (path) {
+      invoke<string>('get_exe_icon', { path })
+        .then(data => { if (isMounted) setIconSrc(data); })
+        .catch(() => { if (isMounted) setIconSrc(null); });
+    }
+    return () => { isMounted = false; };
   }, [path]);
 
-  if (realIconSrc) {
-    return <img src={realIconSrc} alt={appName} className={className} style={{ objectFit: 'contain' }} />;
+  if (iconSrc) {
+    return <img src={iconSrc} alt="" className={className} style={{width: '100%', height: '100%', objectFit: 'contain'}} />;
   }
 
-  const searchString = (appName || path || '').toLowerCase();
-  const matchedKey = Object.keys(ICON_MAP).find(key => searchString.includes(key));
+  const name = appName?.toLowerCase() || "";
+  const iconProps = { className, style: { width: '100%', height: '100%', color: fallbackColor || '#94a3b8' } };
+
+  if (name.includes('chrome')) return <FaChrome {...iconProps} />;
+  if (name.includes('firefox')) return <FaFirefox {...iconProps} />;
+  if (name.includes('edge')) return <FaEdge {...iconProps} />;
+  if (name.includes('opera')) return <FaOpera {...iconProps} />;
   
-  if (matchedKey) {
-      const IconComponent = ICON_MAP[matchedKey];
-      return <IconComponent style={{ color: fallbackColor }} className={className} />;
-  }
+  if (name.includes('code') || name.includes('visual studio')) return <FaCode {...iconProps} />;
+  if (name.includes('intellij')) return <SiIntellijidea {...iconProps} />;
+  
+  if (name.includes('photoshop')) return <SiAdobephotoshop {...iconProps} />;
+  
+  if (name.includes('spotify')) return <FaSpotify {...iconProps} />;
+  if (name.includes('discord')) return <FaDiscord {...iconProps} />;
+  if (name.includes('slack')) return <FaSlack {...iconProps} />;
+  if (name.includes('whatsapp')) return <FaWhatsapp {...iconProps} />;
+  
+  if (name.includes('notion')) return <SiNotion {...iconProps} />;
+  if (name.includes('postman')) return <SiPostman {...iconProps} />;
+  
+  if (name.includes('explorer') || name.includes('finder')) return <FaFolderOpen {...iconProps} />;
+  if (name.includes('settings') || name.includes('einstellungen')) return <FaCog {...iconProps} />;
+  if (name.includes('calc')) return <FaCalculator {...iconProps} />;
+  if (name.includes('camera')) return <FaCamera {...iconProps} />;
 
-  return (
-    <div className={className} style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: fallbackColor, fontWeight: 'bold', fontSize: '0.8em', opacity: 0.7
-    }}>
-      <FaWindows />
-    </div>
-  );
+  return <FaQuestion {...iconProps} style={{...iconProps.style, opacity: 0.5}} />;
 };

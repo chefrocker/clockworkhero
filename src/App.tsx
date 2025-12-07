@@ -1,16 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import Database from '@tauri-apps/plugin-sql';
-import { FaPen, FaSave, FaBriefcase, FaFolderPlus, FaTrash, FaCalendarDay, FaCalendarWeek, FaCog, FaChartPie } from 'react-icons/fa';
+import { FaPen, FaSave, FaCalendarDay, FaCalendarWeek, FaCog, FaChartPie } from 'react-icons/fa';
 
 import { 
     initDatabase, logActiveWindow, loadAllEvents, loadProjects, 
     addProject, deleteProject, saveSession, deleteSession,
-    loadSettings, saveSettings, AppSettings, // WICHTIG: saveSettings (Plural)
+    loadSettings, saveSettings, AppSettings,
     resetDatabase, updateProject
 } from './services/db';
-
-import { exportSessionsToExcel } from './services/exportService';
 
 import { CalendarEngine } from './components/CalendarEngine';
 import { SessionModal } from './components/SessionModal';
@@ -24,7 +22,6 @@ interface WindowInfo { title: string; path: string; }
 
 function App() {
   const [db, setDb] = useState<Database | null>(null);
-  const [currentWindow, setCurrentWindow] = useState("Warte auf Tracking...");
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   
@@ -60,7 +57,7 @@ function App() {
       const info = event.payload as WindowInfo;
       const title = info.title || "Unbekannt";
       const path = info.path || "";
-      setCurrentWindow(title);
+      
       if (db && title !== lastSavedTitle.current && title !== "Unbekannt") {
         try {
             await logActiveWindow(db, title, path);
@@ -134,16 +131,9 @@ function App() {
 
   const handleSaveSettings = async (newSettings: AppSettings) => {
       if (db) {
-          // WICHTIG: Nutze die neue saveSettings Funktion für komplexe Objekte
           await saveSettings(db, newSettings);
           setSettings(newSettings);
           setShowSettings(false);
-      }
-  };
-
-  const handleExport = async () => {
-      if (db) {
-          await exportSessionsToExcel(db);
       }
   };
 
@@ -154,6 +144,7 @@ function App() {
       }
   };
 
+  // FIX: Typen angepasst für SettingsModal Callback ('app' | 'image')
   const handleUpdateProject = async (id: number, name: string, color: string, icon?: string, iconType?: 'app' | 'image') => {
       if (db) {
           await updateProject(db, id, name, color, icon, iconType);
@@ -168,6 +159,7 @@ function App() {
       }
   };
 
+  // FIX: Typen angepasst ('app' | 'image')
   const handleAddProject = async (name: string, color: string, icon?: string, iconType?: 'app' | 'image') => {
       if (db && name) {
           await addProject(db, name, color, icon, iconType);
@@ -205,7 +197,6 @@ function App() {
         onUpdateProject={handleUpdateProject}
         onDeleteProject={handleDeleteProject}
         onAddProject={handleAddProject}
-        onExportData={handleExport}
         onResetData={handleReset}
         db={db}
       />
@@ -242,7 +233,6 @@ function App() {
               onDeleteSession={handleDeleteSession}
               onEventDrop={handleEventChange}
               onEventResize={handleEventChange}
-              // NEU: Settings übergeben
               workStart={settings.workStart}
               workEnd={settings.workEnd}
               scrollTime={settings.workStart + ":00"}

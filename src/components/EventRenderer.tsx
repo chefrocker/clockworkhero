@@ -1,13 +1,7 @@
 import React from 'react';
-import { createRoot } from 'react-dom/client'; // WICHTIG für React 18 Rendering in FullCalendar
 import { FaTrash } from 'react-icons/fa';
 import { AppIcon } from './AppIcon';
 import { hexToRgba } from '../utils/imageUtils';
-
-// FullCalendar erwartet DOM Nodes oder JSX. 
-// Da wir Hooks/Context in der Komponente nutzen wollen, ist es sauberer, eine echte React Komponente zu rendern.
-// Aber FullCalendar's `eventContent` Hook ist etwas speziell.
-// Wir geben hier direkt JSX zurück, das FullCalendar rendert.
 
 export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string) => void) => {
   const props = eventInfo.event.extendedProps;
@@ -51,9 +45,6 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
                 {props.projectName}
             </span>
             {isEditMode && (
-                // Wir nutzen hier ein data-attribute oder stopPropagation im Wrapper, 
-                // da onClick Events in FullCalendar manchmal tricky sind.
-                // Aber React Events sollten durchgereicht werden.
                 <div 
                     style={{
                         background: 'rgba(255,255,255,0.2)', color: 'white', 
@@ -61,7 +52,7 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
                         display: 'flex', alignItems: 'center', justifyContent: 'center'
                     }}
                     onClick={(e) => { 
-                        e.stopPropagation(); // Verhindert Event-Click des Kalenders
+                        e.stopPropagation(); 
                         onDeleteSession(eventInfo.event.id); 
                     }}
                 >

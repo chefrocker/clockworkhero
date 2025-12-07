@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Database from '@tauri-apps/plugin-sql';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area } from 'recharts';
-import { FaClock, FaCalendarAlt, FaArrowUp, FaArrowDown, FaMinus, FaChartLine, FaFilter, FaFileExcel, FaCheckSquare, FaSquare } from 'react-icons/fa';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area } from 'recharts';
+import { FaArrowUp, FaArrowDown, FaMinus, FaChartLine, FaFilter, FaFileExcel, FaCheckSquare, FaSquare } from 'react-icons/fa';
 import { getDashboardStats, DashboardStats, DashboardFilter } from '../services/analyticsService';
 import { exportDashboardAnalysis } from '../services/exportService';
 import { Project } from '../types';
@@ -14,13 +14,11 @@ interface Props {
 export const Dashboard: React.FC<Props> = ({ db, projects }) => {
     const [stats, setStats] = useState<DashboardStats | null>(null);
     
-    // Filter State
     const [startDate, setStartDate] = useState<string>("");
     const [endDate, setEndDate] = useState<string>("");
     const [selectedProjIds, setSelectedProjIds] = useState<number[]>([]);
     const [showFilterMenu, setShowFilterMenu] = useState(false);
 
-    // Initiale Daten (Letzte 14 Tage)
     useEffect(() => {
         const end = new Date();
         const start = new Date();
@@ -29,7 +27,6 @@ export const Dashboard: React.FC<Props> = ({ db, projects }) => {
         setEndDate(end.toISOString().slice(0,10));
     }, []);
 
-    // Daten laden wenn Filter sich ändern
     useEffect(() => {
         if (db && startDate && endDate) {
             const filter: DashboardFilter = {
@@ -66,7 +63,6 @@ export const Dashboard: React.FC<Props> = ({ db, projects }) => {
     return (
         <div style={{padding: '30px', height: '100%', overflowY: 'auto', background: '#f8fafc'}}>
             
-            {/* HEADER */}
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px'}}>
                 <div>
                     <h2 style={{margin: 0, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '10px'}}>
@@ -87,7 +83,6 @@ export const Dashboard: React.FC<Props> = ({ db, projects }) => {
                 </div>
             </div>
 
-            {/* FILTER MENU */}
             {showFilterMenu && (
                 <div style={{
                     background: 'white', padding: '20px', borderRadius: '12px', 
@@ -145,7 +140,6 @@ export const Dashboard: React.FC<Props> = ({ db, projects }) => {
                 </div>
             )}
 
-            {/* KPI CARDS */}
             <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px'}}>
                 <div className="dashboard-card">
                     <div className="card-label">Gesamtzeit</div>
@@ -166,7 +160,6 @@ export const Dashboard: React.FC<Props> = ({ db, projects }) => {
                 )}
             </div>
 
-            {/* TRENDS SECTION */}
             <h3 className="section-title">Veränderungen (vs. vorheriger Zeitraum)</h3>
             <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '15px', marginBottom: '30px'}}>
                 {stats.trends.length === 0 && <div style={{color: '#94a3b8', fontStyle: 'italic'}}>Keine Daten für Vergleichszeitraum vorhanden.</div>}
@@ -189,13 +182,11 @@ export const Dashboard: React.FC<Props> = ({ db, projects }) => {
                 ))}
             </div>
 
-            {/* CHARTS ROW */}
             <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px'}}>
                 
-                {/* CHART 1: VERLAUF */}
                 <div className="dashboard-panel">
                     <h3 className="panel-title">Verlauf</h3>
-                    <div style={{width: '100%', height: 300}}>
+                    <div style={{width: '100%', height: 300, minWidth: 0, minHeight: 0}}>
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={stats.history}>
                                 <defs>
@@ -214,10 +205,9 @@ export const Dashboard: React.FC<Props> = ({ db, projects }) => {
                     </div>
                 </div>
 
-                {/* CHART 2: VERTEILUNG (DONUT) */}
                 <div className="dashboard-panel">
                     <h3 className="panel-title">Verteilung (%)</h3>
-                    <div style={{width: '100%', height: 300}}>
+                    <div style={{width: '100%', height: 300, minWidth: 0, minHeight: 0}}>
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie

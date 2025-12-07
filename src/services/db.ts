@@ -4,8 +4,9 @@ import { LogEntry, Project, ColorEntry, WorkSession, AppSettings, ActivitySubEve
 import { exportSessionsToExcel, exportAllLogsToExcel, backupDatabase, restoreDatabase } from './exportService';
 import { getDashboardStats, DashboardStats } from './analyticsService';
 
+// WICHTIG: AppSettings muss exportiert werden!
 export { exportSessionsToExcel, exportAllLogsToExcel, backupDatabase, restoreDatabase, getDashboardStats };
-export type { DashboardStats };
+export type { DashboardStats, AppSettings }; 
 
 // --- HELPER ---
 function stringToColor(str: string) {
@@ -29,7 +30,6 @@ function simplifyAppName(title: string): string {
   if (t.includes('teams')) return 'Microsoft Teams';
   if (t.includes('explorer')) return 'Explorer';
   
-  // Fallback: Dateiname ohne Pfad und Endung
   const parts = title.split('\\');
   const lastPart = parts[parts.length - 1];
   return lastPart.replace('.exe', '').split(' - ')[0].trim() || title; 
@@ -45,7 +45,6 @@ export async function initDatabase(): Promise<Database> {
   await db.execute(`CREATE TABLE IF NOT EXISTS work_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, description TEXT, start_time DATETIME, end_time DATETIME)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
   
-  // MIGRATIONEN (Fehlertolerant)
   try { await db.execute("ALTER TABLE logs ADD COLUMN exe_path TEXT"); } catch (e) {}
   try { await db.execute("ALTER TABLE projects ADD COLUMN icon TEXT"); } catch (e) {}
   try { await db.execute("ALTER TABLE projects ADD COLUMN icon_type TEXT"); } catch (e) {}
@@ -73,7 +72,6 @@ export async function loadSettings(db: Database): Promise<AppSettings> {
     if (row.key === 'theme') settings.theme = row.value;
     if (row.key === 'groupingThreshold') settings.groupingThreshold = parseInt(row.value);
     if (row.key === 'adminPassword') settings.adminPassword = row.value;
-    // NEU: WeekSchedule laden
     if (row.key === 'weekSchedule') {
         try {
             settings.weekSchedule = JSON.parse(row.value);
@@ -89,16 +87,13 @@ export async function saveSetting(db: Database, key: string, value: string) {
   await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ($1, $2)", [key, value]);
 }
 
-// NEU: Helper für komplexe Settings
 export async function saveSettings(db: Database, settings: AppSettings) {
-    // Einzelne Werte speichern
     await saveSetting(db, 'workStart', settings.workStart || "08:00");
     await saveSetting(db, 'workEnd', settings.workEnd || "17:00");
     await saveSetting(db, 'dailyTarget', (settings.dailyTarget || 8).toString());
     await saveSetting(db, 'groupingThreshold', (settings.groupingThreshold || 5).toString());
     if (settings.adminPassword !== undefined) await saveSetting(db, 'adminPassword', settings.adminPassword);
     
-    // NEU: WeekSchedule speichern
     if (settings.weekSchedule) {
         await saveSetting(db, 'weekSchedule', JSON.stringify(settings.weekSchedule));
     }
@@ -113,9 +108,7 @@ export async function resetDatabase(db: Database) {
   await db.execute("DELETE FROM settings");
 }
 
-// NEU: Alle bekannten Apps für das Farb-Menü laden
 export async function getKnownApps(db: Database): Promise<{name: string, color: string}[]> {
-    // Wir holen alle einzigartigen App-Namen aus den Logs (vereinfacht)
     const logs = await db.select<any[]>("SELECT DISTINCT title, exe_path FROM logs LIMIT 5000");
     const uniqueNames = new Set<string>();
     
@@ -125,7 +118,6 @@ export async function getKnownApps(db: Database): Promise<{name: string, color: 
 
     const result = [];
     for (const name of uniqueNames) {
-        // Farbe laden falls vorhanden
         const colorRow = await db.select<any[]>("SELECT color FROM app_colors WHERE name = $1", [name]);
         const color = colorRow.length > 0 ? colorRow[0].color : stringToColor(name);
         result.push({ name, color });
@@ -133,15 +125,23 @@ export async function getKnownApps(db: Database): Promise<{name: string, color: 
     return result.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// NEU: Farbe für eine App speichern
 export async function saveAppColor(db: Database, appName: string, color: string) {
     await db.execute("INSERT OR REPLACE INTO app_colors (name, color) VALUES ($1, $2)", [appName, color]);
 }
 
 // --- PROJECTS ---
 export async function loadProjects(db: Database): Promise<Project[]> {
-  return await db.select<Project[]>("SELECT * FROM projects");
+  // WICHTIG: Mapping von DB (snake_case) zu TS (camelCase)
+  const rows = await db.select<any[]>("SELECT * FROM projects");
+  return rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      color: row.color,
+      icon: row.icon,
+      iconType: row.icon_type as 'app' | 'image' // Mapping hier!
+  }));
 }
+
 export async function addProject(db: Database, name: string, color: string, icon?: string, iconType?: string) {
   await db.execute("INSERT INTO projects (name, color, icon, icon_type) VALUES ($1, $2, $3, $4)", [name, color, icon || null, iconType || 'app']);
 }
@@ -198,14 +198,11 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
   async function getColor(name: string) {
     if (colorCache.has(name)) return colorCache.get(name)!;
     const c = stringToColor(name);
-    // Wir speichern die generierte Farbe NICHT sofort in die DB, damit der User sie im Menü überschreiben kann
-    // und wir nicht die DB zumüllen. Nur explizit gespeicherte Farben landen in app_colors.
     colorCache.set(name, c);
     return c;
   }
 
-  // 1. AUTO LOGS
-  const logs = await db.select<LogEntry[]>("SELECT * FROM logs ORDER BY created_at ASC LIMIT 15000"); // Limit erhöht
+  const logs = await db.select<LogEntry[]>("SELECT * FROM logs ORDER BY created_at ASC LIMIT 15000");
   if (logs.length > 0) {
     let currentGroup = {
       appName: simplifyAppName(logs[0].title || logs[0].exe_path),
@@ -228,7 +225,6 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
       if (appName === currentGroup.appName && gapInMinutes <= groupingThresholdMinutes) {
         currentGroup.end = new Date(logTime.getTime() + 60000);
         const lastSub = currentGroup.subEvents[currentGroup.subEvents.length - 1];
-        // Nur hinzufügen wenn Titel anders, um Speicher zu sparen
         if (lastSub.title !== log.title) {
             currentGroup.subEvents.push({ time: logTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}), title: log.title });
         }
@@ -237,7 +233,7 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
         if (currentGroup.end > currentGroup.start) {
             allEvents.push({
               id: 'auto-group-' + i,
-              title: currentGroup.appName, // HIER: Nur der einfache Name für den Kalender
+              title: currentGroup.appName,
               start: currentGroup.start,
               end: currentGroup.end,
               display: 'block',
@@ -282,7 +278,6 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
     });
   }
 
-  // 2. MANUAL SESSIONS
   const sessions = await db.select<WorkSession[]>("SELECT * FROM work_sessions");
   const projects = await loadProjects(db);
   for (const session of sessions) {
@@ -305,7 +300,8 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
         projectName: name,
         projectColor: color,
         projectIcon: project?.icon,
-        projectIconType: project?.icon_type as 'app' | 'image',
+        // FIX: Hier greifen wir auf das bereits gemappte iconType zu
+        projectIconType: project?.iconType,
         description: session.description
       }
     });

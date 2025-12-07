@@ -6,7 +6,7 @@ import { AppSettings, Project, DaySchedule } from '../types';
 import { AppIcon } from './AppIcon';
 import { getCroppedImg } from '../utils/imageUtils';
 import { getKnownApps, saveAppColor, exportAllLogsToExcel, backupDatabase, restoreDatabase, saveSetting } from '../services/db';
-import { WorkScheduleEditor } from './WorkScheduleEditor'; // NEU
+import { WorkScheduleEditor } from './WorkScheduleEditor';
 
 interface Props {
   isOpen: boolean;
@@ -14,10 +14,11 @@ interface Props {
   settings: AppSettings;
   projects: Project[];
   onSaveSettings: (newSettings: AppSettings) => void;
-  onUpdateProject: (id: number, name: string, color: string, icon?: string, iconType?: string) => void;
+  // FIX: Typen von string zu 'app' | 'image' geändert
+  onUpdateProject: (id: number, name: string, color: string, icon?: string, iconType?: 'app' | 'image') => void;
   onDeleteProject: (id: number) => void;
-  onAddProject: (name: string, color: string, icon?: string, iconType?: string) => void;
-  onExportData: () => void;
+  // FIX: Typen von string zu 'app' | 'image' geändert
+  onAddProject: (name: string, color: string, icon?: string, iconType?: 'app' | 'image') => void;
   onResetData: () => void;
   db: Database | null;
 }
@@ -34,7 +35,6 @@ function hslToHex(h: number, s: number, l: number) {
   return `#${f(0)}${f(8)}${f(4)}`;
 }
 
-// Helper: String "hsl(123, 50%, 50%)" zu Hex
 function colorToHex(color: string): string {
     if (color.startsWith('#')) return color;
     if (color.startsWith('hsl')) {
@@ -43,7 +43,7 @@ function colorToHex(color: string): string {
             return hslToHex(parseInt(match[1]), parseInt(match[2]), parseInt(match[3]));
         }
     }
-    return '#000000'; // Fallback
+    return '#000000';
 }
 
 function getDefaultWeekSchedule(): DaySchedule[] {
@@ -59,7 +59,7 @@ function getDefaultWeekSchedule(): DaySchedule[] {
 
   return days.map((d, idx) => ({
     ...d,
-    isWorkday: idx < 5, // Mo-Fr = Arbeitstage
+    isWorkday: idx < 5,
     blocks: idx < 5 ? [{
       id: `block-${idx}-1`,
       start: "08:00",
@@ -72,29 +72,25 @@ function getDefaultWeekSchedule(): DaySchedule[] {
 export const SettingsModal: React.FC<Props> = ({ 
     isOpen, onClose, settings, projects, 
     onSaveSettings, onUpdateProject, onDeleteProject, onAddProject,
-    onExportData, onResetData, db
+    onResetData, db
 }) => {
   
   const [activeTab, setActiveTab] = useState<'general' | 'tracking' | 'projects' | 'colors' | 'database' | 'about'>('general');
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   
-  // Project State
   const [newProjName, setNewProjName] = useState("");
   const [newProjColor, setNewProjColor] = useState("#3498db");
   const [newProjIcon, setNewProjIcon] = useState(""); 
   const [newProjIconType, setNewProjIconType] = useState<'app' | 'image'>('app');
 
-  // App Colors State
   const [knownApps, setKnownApps] = useState<{name: string, color: string}[]>([]);
   const [appSearch, setAppSearch] = useState("");
 
-  // Database State
   const [dbPasswordInput, setDbPasswordInput] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [isDbUnlocked, setIsDbUnlocked] = useState(false);
   const [hasPassword, setHasPassword] = useState(false);
 
-  // Cropper State
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -103,7 +99,6 @@ export const SettingsModal: React.FC<Props> = ({
 
   useEffect(() => {
     if (isOpen) {
-        // Settings laden und WeekSchedule initialisieren falls leer
         const initSettings = { ...settings };
         if (!initSettings.weekSchedule || initSettings.weekSchedule.length === 0) {
             initSettings.weekSchedule = getDefaultWeekSchedule();
@@ -123,7 +118,7 @@ export const SettingsModal: React.FC<Props> = ({
       }
   }, [activeTab, db]);
 
-  const onCropComplete = useCallback((croppedArea: any, croppedAreaPixels: any) => {
+  const onCropComplete = useCallback((_croppedArea: any, croppedAreaPixels: any) => {
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
 
@@ -333,7 +328,6 @@ export const SettingsModal: React.FC<Props> = ({
                                     <div style={{flex: 1, overflow: 'hidden'}}>
                                         <div style={{fontSize: '0.9rem', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}} title={app.name}>{app.name}</div>
                                     </div>
-                                    {/* FIX: colorToHex nutzen, damit der Input nicht meckert */}
                                     <input type="color" value={colorToHex(app.color)} onChange={e => handleAppColorChange(app.name, e.target.value)} style={{width: '30px', height: '30px', border: 'none', cursor: 'pointer', borderRadius: '50%'}} />
                                 </div>
                             ))}

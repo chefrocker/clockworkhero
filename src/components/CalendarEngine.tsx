@@ -28,7 +28,6 @@ export const CalendarEngine: React.FC<Props> = ({
   
   const calendarRef = useRef<FullCalendar>(null);
 
-  // View Mode umschalten
   useEffect(() => {
     const timer = setTimeout(() => {
         if (calendarRef.current) {
@@ -44,7 +43,6 @@ export const CalendarEngine: React.FC<Props> = ({
   const handleNext = () => calendarRef.current?.getApi().next();
   const handleToday = () => calendarRef.current?.getApi().today();
 
-  // Berechne Scroll-Startzeit (1 Stunde vor Arbeitsbeginn)
   const getScrollTime = () => {
       if (!workStart) return "07:00:00";
       const [h, m] = workStart.split(':').map(Number);
@@ -55,7 +53,6 @@ export const CalendarEngine: React.FC<Props> = ({
   return (
     <div style={{height: '100%', display: 'flex', flexDirection: 'column'}}>
         
-        {/* NAVIGATION */}
         <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
             padding: '10px 20px', background: 'white', borderBottom: '1px solid #e2e8f0'
@@ -65,9 +62,6 @@ export const CalendarEngine: React.FC<Props> = ({
                 <button onClick={handleToday} style={{...navBtnStyle, fontWeight: 'bold', padding: '6px 12px'}}>Heute</button>
                 <button onClick={handleNext} style={navBtnStyle}><FaChevronRight /></button>
             </div>
-            <div style={{fontWeight: 'bold', color: '#64748b'}}>
-                {/* Titel wird im Kalender angezeigt */}
-            </div>
         </div>
 
         <div style={{flex: 1, overflow: 'hidden'}}>
@@ -76,7 +70,7 @@ export const CalendarEngine: React.FC<Props> = ({
                 plugins={[timeGridPlugin, interactionPlugin]}
                 initialView={viewMode === 'week' ? 'timeGridWeek' : 'timeGridDay'}
                 locale={deLocale}
-                headerToolbar={{ left: 'title', center: '', right: '' }}
+                headerToolbar={false} 
                 events={events}
                 editable={true}
                 selectable={true}
@@ -85,15 +79,13 @@ export const CalendarEngine: React.FC<Props> = ({
                 weekends={true}
                 nowIndicator={true}
                 
-                // ARBEITSZEITEN LOGIK
-                scrollTime={getScrollTime()} // Startet Ansicht bei Arbeitsbeginn (gescrollt)
-                slotMinTime="00:00:00" // FIX: Erlaubt Zeiten ab Mitternacht
-                slotMaxTime="24:00:00" // Bis Mitternacht
+                scrollTime={scrollTime || getScrollTime()} // FIX: scrollTime nutzen
+                slotMinTime="00:00:00"
+                slotMaxTime="24:00:00"
                 allDaySlot={false}
                 
-                // Business Hours (Gelb markiert via CSS)
                 businessHours={{
-                    daysOfWeek: [1, 2, 3, 4, 5], // Mo - Fr
+                    daysOfWeek: [1, 2, 3, 4, 5],
                     startTime: workStart || '08:00',
                     endTime: workEnd || '17:00',
                 }}
@@ -106,7 +98,12 @@ export const CalendarEngine: React.FC<Props> = ({
                 eventClick={onEventClick}
                 eventDrop={onEventDrop}
                 eventResize={onEventResize}
-                eventClassNames={(arg) => arg.event.extendedProps.type === 'auto' ? ['auto-event'] : ['manual-event']}
+                eventClassNames={(arg) => {
+                    // FIX: isEditMode nutzen, um Klasse zu setzen
+                    const classes = arg.event.extendedProps.type === 'auto' ? ['auto-event'] : ['manual-event'];
+                    if (isEditMode && arg.event.extendedProps.type === 'auto') classes.push('edit-mode-auto');
+                    return classes;
+                }}
             />
         </div>
     </div>
