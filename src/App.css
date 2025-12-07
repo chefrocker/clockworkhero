@@ -22,6 +22,11 @@
   --cal-business-hours: rgba(255, 250, 205, 0.5); /* LemonChiffon Transparent */
   --cal-non-business: #ffffff;
   --cal-now-line: #ef4444;
+
+  /* Status Colors */
+  --success: #10b981;
+  --danger: #ef4444;
+  --primary: #3b82f6;
 }
 
 /* Dark Mode Overrides */
@@ -87,6 +92,13 @@ html, body, #root {
   box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
   z-index: 50;
   transition: background-color 0.3s, border-color 0.3s;
+  gap: 20px;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
 }
 
 .header-status { 
@@ -100,12 +112,34 @@ html, body, #root {
   padding: 6px 12px; 
   border-radius: 20px;
   border: 1px solid var(--border-color);
+  white-space: nowrap;
 }
 
-.status-dot { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,0.2); }
-.status-dot.active { background: #10b981; box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px rgba(239,68,68,0.2); }
+.status-dot.active { background: var(--success); box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
 
 .header-controls { display: flex; gap: 10px; align-items: center; }
+
+/* TIMER SECTION */
+.timer-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-color);
+    padding: 4px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.timer-display {
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    font-size: 1.1rem;
+    color: var(--primary);
+    padding: 0 10px;
+    min-width: 80px;
+    text-align: center;
+}
 
 /* =========================================
    4. BUTTONS
@@ -135,7 +169,7 @@ button {
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 .btn-toggle:hover { background: #1e293b; }
-.btn-toggle.active { background: #10b981; } 
+.btn-toggle.active { background: var(--success); } 
 .btn-toggle.active:hover { background: #059669; }
 
 .btn-refresh { 
@@ -149,13 +183,13 @@ button {
 .btn-refresh:hover { background: var(--bg-color); color: var(--text-color); }
 
 .btn-save { 
-  background: #3b82f6; 
+  background: var(--primary); 
   color: white; 
   padding: 10px 24px; 
   border-radius: 6px; 
   font-weight: 600; 
 }
-.btn-save:hover { background: #2563eb; transform: translateY(-1px); box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3); }
+.btn-save:hover { filter: brightness(1.1); transform: translateY(-1px); box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3); }
 
 .btn-close { 
   background: transparent; 
@@ -189,26 +223,31 @@ button {
 /* Einheitliches Styling für alle Input-Typen */
 .input-text, .input-select, .input-time, .input-number, textarea.input-text { 
   width: 100%; 
-  padding: 10px 12px; 
+  padding: 0 12px; /* Padding nur links/rechts, Höhe regelt vertical */
   border-radius: 8px; 
   border: 1px solid var(--border-color); 
   font-size: 0.95rem; 
   background: var(--input-bg); 
   color: var(--text-color);
   transition: border 0.2s, box-shadow 0.2s;
-  box-sizing: border-box; /* Wichtig für Grid-Layout */
-  height: 42px; /* Einheitliche Höhe */
+  box-sizing: border-box; 
+  height: 42px; /* Einheitliche Höhe erzwingen */
+  line-height: 40px; /* Vertikale Zentrierung */
   font-family: inherit;
+  appearance: none; /* Browser-Styles entfernen */
 }
 
+/* Speziell für Textarea */
 textarea.input-text {
-    height: auto; /* Textarea darf wachsen */
+    height: auto; 
     min-height: 80px;
+    padding: 10px 12px;
+    line-height: 1.5;
 }
 
 .input-text:focus, .input-select:focus, .input-time:focus, .input-number:focus { 
   outline: none; 
-  border-color: #3b82f6; 
+  border-color: var(--primary); 
   box-shadow: 0 0 0 3px rgba(59,130,246,0.1); 
 }
 
@@ -257,348 +296,6 @@ textarea.input-text {
 .settings-h3 { margin: 0 0 15px 0; font-size: 1.1rem; color: var(--text-color); border-bottom: 2px solid var(--border-color); padding-bottom: 8px; display: inline-block; }
 .settings-desc { font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 20px; }
 
-/* Icon Hover im Settings Modal */
-.icon-editable { cursor: pointer; transition: transform 0.2s, opacity 0.2s; position: relative; }
-.icon-editable:hover { transform: scale(1.1); opacity: 0.8; }
-.icon-editable::after {
-    content: '✎'; position: absolute; top: -5px; right: -5px; background: #3b82f6; color: white;
-    font-size: 10px; width: 14px; height: 14px; border-radius: 50%; display: flex; justify-content: center; align-items: center;
-    opacity: 0; transition: opacity 0.2s;
-}
-.icon-editable:hover::after { opacity: 1; }
-
-/* =========================================
-   7. FULLCALENDAR CUSTOMIZATION
-   ========================================= */
-.fc { background-color: var(--panel-bg); }
-
-/* Grid Lines */
-.fc-theme-standard td, .fc-theme-standard th { border-color: var(--cal-grid) !important; }
-
-/* Text Colors */
-.fc-col-header-cell-cushion { color: var(--text-color); font-weight: 700; padding: 10px 0; }
-.fc-timegrid-slot-label-cushion { color: var(--text-secondary); font-size: 0.85rem; font-weight: 600; }
-.fc-timegrid-axis-cushion { color: var(--text-secondary); }
-
-/* Slots */
-.fc-timegrid-slot { height: 50px !important; border-bottom: 1px solid var(--cal-grid); }
-
-/* Arbeitszeiten (Business Hours) */
-.fc-business-container {
-    background-color: var(--cal-business-hours) !important;
-    pointer-events: none; /* Klicks gehen durch */
-}
-
-/* Nicht-Arbeitszeit Hintergrund */
-.fc .fc-timegrid-col-bg {
-    background: var(--cal-non-business);
-}
-
-/* Aktuelle Zeit Linie */
-.fc-now-indicator-line { border-color: var(--cal-now-line) !important; border-width: 2px !important; }
-.fc-now-indicator-arrow { border-color: var(--cal-now-line) !important; }
-
-/* Events Reset */
-.fc-event { 
-    border: none !important; 
-    background: transparent !important; 
-    box-shadow: none !important; 
-    margin: 0 2px !important; 
-    overflow: visible !important; 
-}
-
-/* =========================================
-   8. EVENT RENDERER STYLES
-   ========================================= */
-
-/* --- Manuelle Sessions --- */
-.manual-session-block {
-  display: flex; flex-direction: column; justify-content: center;
-  padding: 4px 8px; height: 100%; width: 100%;
-  border-radius: 6px; 
-  /* Background wird inline gesetzt (Gradient) */
-  border: 1px solid rgba(255,255,255,0.2);
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  z-index: 50; position: relative;
-  transition: transform 0.1s, box-shadow 0.1s;
-  color: white; /* Immer weißer Text auf farbigem Grund */
-}
-.manual-session-block:hover { transform: translateY(-1px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); z-index: 100; }
-
-/* --- Auto Activity Stream --- */
-.auto-event-block {
-    /* Styles werden inline in EventRenderer gesetzt, hier nur Fallbacks */
-    border-radius: 6px;
-    overflow: hidden;
-}
-
-/* Edit Mode: Auto Events ausgrauen */
-.edit-mode-auto {
-    opacity: 0.4 !important;
-    filter: grayscale(100%);
-    pointer-events: none !important; /* Klicks gehen durch zum Kalender */
-}
-
-/* Watermark Icon */
-.watermark-icon {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
-}
-
-/* =========================================
-   9. WOCHENANSICHT OPTIMIERUNGEN
-   ========================================= */
-.fc-timeGridWeek-view .manual-session-block {
-  padding: 2px 4px;
-}
-
-/* In der Wochenansicht Text ausblenden wenn zu klein */
-.fc-timeGridWeek-viewHier ist die **vollständige `src/App.css`**.
-
-Ich habe sie so aufgebaut, dass:
-1.  **Dark Mode** vollständig funktioniert (über CSS-Variablen).
-2.  **Inputs** einheitlich aussehen.
-3.  **Kalender-Farben** (Arbeitszeit vs. Freizeit) korrekt gesteuert werden.
-4.  **Wochenansicht** optimiert ist (kleinere Icons, weniger Text).
-
-### 📄 `src/App.css`
-
-```css
-/* --- VARIABLES & THEME --- */
-:root {
-  /* Light Mode (Standard) */
-  --bg-color: #f8fafc;          /* Hintergrund der App */
-  --panel-bg: #ffffff;          /* Hintergrund von Karten/Modals */
-  --text-color: #1e293b;        /* Haupttext */
-  --text-secondary: #64748b;    /* Nebentext (Labels) */
-  --border-color: #e2e8f0;      /* Rahmen */
-  --input-bg: #ffffff;          /* Eingabefelder */
-  --modal-overlay: rgba(0, 0, 0, 0.5);
-  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  
-  /* Header */
-  --header-bg: #ffffff;
-  --header-border: #e2e8f0;
-
-  /* Kalender */
-  --cal-grid: #e2e8f0;
-  --cal-text: #334155;
-  --cal-business-hours: rgba(255, 250, 205, 0.6); /* Zartes Gelb für Arbeitszeit */
-  --cal-non-business: #ffffff; /* Weiß für Freizeit */
-  
-  /* Status Colors */
-  --success: #10b981;
-  --danger: #ef4444;
-  --primary: #3b82f6;
-}
-
-/* DARK MODE OVERRIDES */
-body.dark-mode {
-  --bg-color: #0f172a;          /* Sehr dunkles Blau */
-  --panel-bg: #1e293b;          /* Dunkles Panel */
-  --text-color: #f1f5f9;        /* Heller Text */
-  --text-secondary: #94a3b8;    /* Gedimmter Text */
-  --border-color: #334155;      /* Dunkle Rahmen */
-  --input-bg: #020617;          /* Fast schwarze Inputs */
-  --modal-overlay: rgba(0, 0, 0, 0.7);
-  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
-
-  /* Header Dark */
-  --header-bg: #1e293b;
-  --header-border: #334155;
-
-  /* Kalender Dark */
-  --cal-grid: #334155;          /* Dunkle Gitterlinien */
-  --cal-text: #cbd5e1;
-  --cal-business-hours: rgba(255, 215, 0, 0.08); /* Sehr dezentes Gold für Arbeitszeit */
-  --cal-non-business: #0f172a;  /* Dunkler Hintergrund für Freizeit */
-}
-
-/* --- GLOBAL RESET --- */
-html, body, #root {
-  height: 100%; margin: 0; padding: 0; overflow: hidden;
-  font-family: 'Segoe UI', 'Inter', Roboto, Helvetica, Arial, sans-serif;
-  background-color: var(--bg-color);
-  color: var(--text-color);
-  transition: background-color 0.3s, color 0.3s;
-}
-
-.app-container { height: 100vh; display: flex; flex-direction: column; }
-.calendar-wrapper { flex: 1; overflow: hidden; position: relative; background: var(--panel-bg); }
-
-/* --- HEADER --- */
-.app-header {
-  background: var(--header-bg); 
-  padding: 12px 24px;
-  display: flex; justify-content: space-between; align-items: center;
-  border-bottom: 1px solid var(--header-border); 
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
-  z-index: 50;
-}
-
-.header-status { 
-  font-size: 0.95rem; font-weight: 700; color: var(--text-secondary); 
-  display: flex; align-items: center; gap: 8px; 
-  background: var(--bg-color); padding: 6px 12px; border-radius: 20px;
-  border: 1px solid var(--border-color);
-}
-.status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px rgba(239,68,68,0.2); }
-.status-dot.active { background: var(--success); box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
-
-.header-controls { display: flex; gap: 10px; align-items: center; }
-
-/* --- BUTTONS --- */
-button { 
-  display: flex; align-items: center; gap: 8px; 
-  font-family: inherit; transition: all 0.15s ease; cursor: pointer; 
-  font-size: 0.9rem; border: 1px solid transparent;
-}
-
-.btn-secondary { 
-  padding: 8px 16px; background: var(--panel-bg); color: var(--text-color); 
-  border: 1px solid var(--border-color); border-radius: 6px; font-weight: 600; 
-}
-.btn-secondary:hover { background: var(--bg-color); border-color: var(--text-secondary); }
-
-.btn-toggle { 
-  padding: 8px 16px; background: var(--text-color); color: var(--bg-color); 
-  border-radius: 6px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-}
-.btn-toggle:hover { opacity: 0.9; }
-.btn-toggle.active { background: var(--success); color: white; } 
-.btn-toggle.active:hover { background: #059669; }
-
-.btn-refresh { 
-  padding: 8px; background: transparent; color: var(--text-secondary); 
-  border-radius: 6px; font-size: 0.9rem; border: 1px solid var(--border-color);
-}
-.btn-refresh:hover { background: var(--bg-color); color: var(--text-color); }
-
-.btn-save { background: var(--primary); color: white; padding: 10px 24px; border-radius: 6px; font-weight: 600; }
-.btn-save:hover { filter: brightness(1.1); transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
-
-.btn-close { background: transparent; color: var(--text-secondary); padding: 10px 20px; border-radius: 6px; font-weight: 600; border: 1px solid var(--border-color); }
-.btn-close:hover { background: var(--bg-color); color: var(--text-color); }
-
-/* --- INPUTS --- */
-.input-group { display: flex; flex-direction: column; gap: 6px; }
-.input-label { display: block; font-weight: 600; color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
-
-.input-text, .input-select, .input-time, .input-number { 
-  width: 100%; padding: 10px 12px; border-radius: 8px; 
-  border: 1px solid var(--border-color); 
-  font-size: 0.95rem; 
-  background: var(--input-bg); 
-  color: var(--text-color);
-  transition: border 0.2s, box-shadow 0.2s;
-  box-sizing: border-box; /* Wichtig für Layout */
-  height: 42px;
-}
-.input-text:focus, .input-select:focus, .input-time:focus, .input-number:focus { 
-  outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); 
-}
-
-/* --- MODAL --- */
-.modal-overlay { 
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
-  background-color: var(--modal-overlay); 
-  backdrop-filter: blur(4px); 
-  display: flex; justify-content: center; align-items: center; 
-  z-index: 9999; 
-}
-.modal-content { 
-  background: var(--panel-bg); 
-  border-radius: 12px; 
-  box-shadow: var(--shadow); 
-  overflow: hidden; 
-  border: 1px solid var(--border-color);
-  animation: slideUp 0.2s ease-out; 
-  display: flex; flex-direction: column;
-}
-.modal-header { 
-  padding: 20px 24px; 
-  background: var(--bg-color); 
-  color: var(--text-color); 
-  display: flex; align-items: center; gap: 12px; 
-  border-bottom: 1px solid var(--border-color);
-}
-.modal-header h2 { margin: 0; font-size: 1.2rem; }
-.modal-body { padding: 24px; color: var(--text-color); }
-.modal-footer { 
-  padding: 16px 24px; 
-  background: var(--bg-color); 
-  display: flex; justify-content: flex-end; gap: 12px; 
-  border-top: 1px solid var(--border-color); 
-}
-
-@keyframes slideUp { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-
-/* --- FULLCALENDAR STYLING --- */
-.fc { height: 100%; background-color: var(--panel-bg); }
-.fc-timegrid-slot { height: 50px !important; border-bottom: 1px solid var(--cal-grid); } 
-
-/* Textfarben im Kalender */
-.fc-col-header-cell-cushion { color: var(--text-color); font-weight: 700; padding: 10px 0; }
-.fc-timegrid-slot-label-cushion { color: var(--text-secondary); font-size: 0.85rem; }
-.fc-timegrid-axis-cushion { color: var(--text-secondary); }
-
-/* Gitterlinien */
-.fc-theme-standard td, .fc-theme-standard th { border-color: var(--cal-grid) !important; }
-
-/* Arbeitszeit Hintergrund (Business Hours) */
-.fc-business-container {
-    background-color: var(--cal-business-hours) !important;
-    pointer-events: none; 
-}
-
-/* Nicht-Arbeitszeit Hintergrund */
-.fc .fc-timegrid-col-bg {
-    background: var(--cal-non-business);
-}
-
-/* Aktuelle Zeit Linie */
-.fc-now-indicator-line { border-color: var(--danger) !important; border-width: 2px !important; }
-.fc-now-indicator-arrow { border-color: var(--danger) !important; }
-
-/* --- EVENT BLOCKS --- */
-
-/* Manuelle Sessions */
-.manual-session-block {
-  display: flex; flex-direction: column; justify-content: center;
-  padding: 4px 8px; height: 100%; width: 100%;
-  border-radius: 6px; 
-  /* Background wird inline gesetzt (Gradient) */
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  border: 1px solid rgba(255,255,255,0.2);
-  z-index: 50; position: relative;
-  transition: transform 0.1s, box-shadow 0.1s;
-}
-.manual-session-block:hover { transform: translateY(-1px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); z-index: 100; }
-
-/* Auto Events (Activity Stream) */
-.auto-event-block {
-    /* Styles werden meist inline gesetzt, aber hier Defaults */
-    border-radius: 6px;
-    overflow: hidden;
-}
-
-/* --- WOCHENANSICHT OPTIMIERUNG --- */
-/* Wenn wir in der Wochenansicht sind, passen wir die Blöcke an */
-.fc-timeGridWeek-view .manual-session-block {
-  padding: 2px 4px; 
-}
-.fc-timeGridWeek-view .manual-session-title { font-size: 0.75rem; }
-.fc-timeGridWeek-view .manual-session-desc { display: none; } /* Beschreibung ausblenden */
-
-/* Wasserzeichen Icon */
-.watermark-icon {
-  width: 100%; height: 100%; object-fit: contain;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
-}
-
-/* Icon Editable Hover (Settings) */
 .icon-editable { cursor: pointer; transition: transform 0.2s, opacity 0.2s; position: relative; }
 .icon-editable:hover { transform: scale(1.1); opacity: 0.8; }
 .icon-editable::after {
@@ -608,29 +305,64 @@ button {
 }
 .icon-editable:hover::after { opacity: 1; }
 
+/* =========================================
+   7. FULLCALENDAR CUSTOMIZATION
+   ========================================= */
+.fc { background-color: var(--panel-bg); }
+.fc-theme-standard td, .fc-theme-standard th { border-color: var(--cal-grid) !important; }
+.fc-col-header-cell-cushion { color: var(--text-color); font-weight: 700; padding: 10px 0; }
+.fc-timegrid-slot-label-cushion { color: var(--text-secondary); font-size: 0.85rem; font-weight: 600; }
+.fc-timegrid-axis-cushion { color: var(--text-secondary); }
+.fc-timegrid-slot { height: 50px !important; border-bottom: 1px solid var(--cal-grid); }
+.fc-business-container { background-color: var(--cal-business-hours) !important; pointer-events: none; }
+.fc .fc-timegrid-col-bg { background: var(--cal-non-business); }
+.fc-now-indicator-line { border-color: var(--cal-now-line) !important; border-width: 2px !important; }
+.fc-now-indicator-arrow { border-color: var(--cal-now-line) !important; }
+.fc-event { border: none !important; background: transparent !important; box-shadow: none !important; margin: 0 2px !important; overflow: visible !important; }
+
+/* =========================================
+   8. EVENT RENDERER STYLES
+   ========================================= */
+.manual-session-block {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 4px 8px; height: 100%; width: 100%;
+  border-radius: 6px; 
+  border: 1px solid rgba(255,255,255,0.2);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  z-index: 50; position: relative;
+  transition: transform 0.1s, box-shadow 0.1s;
+  color: white; 
+}
+.manual-session-block:hover { transform: translateY(-1px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); z-index: 100; }
+
+.auto-event-block { border-radius: 6px; overflow: hidden; }
+.edit-mode-auto { opacity: 0.4 !important; filter: grayscale(100%); pointer-events: none !important; }
+.watermark-icon { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); }
+
+.fc-timeGridWeek-view .manual-session-block { padding: 2px 4px; }
+.fc-timeGridWeek-view .manual-session-title { font-size: 0.75rem; }
+.fc-timeGridWeek-view .manual-session-desc { display: none; }
+
 /* Dashboard Cards */
 .dashboard-card {
-    background: var(--panel-bg); 
-    padding: 20px; 
-    border-radius: 12px;
-    box-shadow: var(--shadow);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
+    background: var(--panel-bg); padding: 20px; border-radius: 12px;
+    box-shadow: var(--shadow); border: 1px solid var(--border-color); color: var(--text-color);
 }
 .card-label { color: var(--text-secondary); font-size: 0.85rem; font-weight: 600; text-transform: uppercase; }
 .card-value { color: var(--text-color); font-size: 2rem; font-weight: 800; }
 .card-unit { color: var(--text-secondary); font-size: 1rem; }
-
 .dashboard-panel {
-    background: var(--panel-bg);
-    padding: 25px;
-    border-radius: 12px;
-    box-shadow: var(--shadow);
-    border: 1px solid var(--border-color);
+    background: var(--panel-bg); padding: 25px; border-radius: 12px;
+    box-shadow: var(--shadow); border: 1px solid var(--border-color);
 }
 .panel-title { color: var(--text-color); margin-bottom: 20px; font-weight: 700; }
 .section-title { color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem; margin: 30px 0 15px 0; }
 
-/* Settings H3 */
-.settings-h3 { color: var(--text-color); margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
-.settings-desc { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 15px; }
+
+/* =========================================
+   7. FULLCALENDAR CUSTOMIZATION
+   ========================================= */
+.fc { height: 100%; background-color: var(--panel-bg); }
+
+/* WICHTIG: Hier wurde die Höhe verdreifacht (50px -> 150px) */
+.fc-timegrid-slot { height: 150px !important; border-bottom: 1px solid var(--cal-grid); } 

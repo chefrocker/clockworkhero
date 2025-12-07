@@ -3,11 +3,13 @@ import Cropper from 'react-easy-crop';
 import Database from '@tauri-apps/plugin-sql';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
-import { FaCog, FaSave, FaClock, FaPalette, FaDatabase, FaTrash, FaFileExcel, FaBriefcase, FaPlus, FaImage, FaCheck, FaTimes, FaLock, FaUnlock, FaHdd, FaKey, FaUndo, FaInfoCircle, FaSun, FaMoon } from 'react-icons/fa';
+// FIX: Unused imports removed
+import { FaCog, FaSave, FaClock, FaPalette, FaDatabase, FaTrash, FaBriefcase, FaPlus, FaImage, FaCheck, FaTimes, FaLock, FaUnlock, FaHdd, FaKey, FaUndo, FaInfoCircle, FaSun, FaMoon } from 'react-icons/fa';
 import { AppSettings, Project, DaySchedule } from '../types';
 import { AppIcon } from './AppIcon';
 import { getCroppedImg } from '../utils/imageUtils';
-import { getKnownApps, saveAppColor, exportAllLogsToExcel, backupDatabase, restoreDatabase, saveSetting } from '../services/db';
+// FIX: saveAppColor -> saveAppConfig, unused exports removed
+import { getKnownApps, saveAppConfig, backupDatabase, restoreDatabase, saveSetting } from '../services/db';
 import { WorkScheduleEditor } from './WorkScheduleEditor';
 
 interface Props {
@@ -23,10 +25,6 @@ interface Props {
   db: Database | null;
 }
 
-// ... (Helper Funktionen hslToHex, colorToHex, getDefaultWeekSchedule bleiben gleich) ...
-// ... (Bitte aus vorheriger Antwort kopieren) ...
-
-// HELPER (Wiederholung zur Sicherheit)
 function hslToHex(h: number, s: number, l: number) {
   l /= 100;
   const a = s * Math.min(l, 1 - l) / 100;
@@ -83,7 +81,7 @@ export const SettingsModal: React.FC<Props> = ({
   const [newProjIcon, setNewProjIcon] = useState(""); 
   const [newProjIconType, setNewProjIconType] = useState<'app' | 'image'>('app');
 
-  const [knownApps, setKnownApps] = useState<{name: string, color: string}[]>([]);
+  const [knownApps, setKnownApps] = useState<{name: string, color: string, icon?: string}[]>([]);
   const [appSearch, setAppSearch] = useState("");
 
   const [dbPasswordInput, setDbPasswordInput] = useState("");
@@ -95,7 +93,9 @@ export const SettingsModal: React.FC<Props> = ({
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+  
   const [editingProjId, setEditingProjId] = useState<number | null>(null);
+  const [editingAppName, setEditingAppName] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -125,7 +125,6 @@ export const SettingsModal: React.FC<Props> = ({
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
 
-  // --- ICON UPDATE LOGIC (Verbessert) ---
   const handleIconUpdate = async (target: 'project' | 'app', idOrName: string | number) => {
       try {
           const file = await open({
@@ -135,10 +134,8 @@ export const SettingsModal: React.FC<Props> = ({
 
           if (!file) return;
 
-          // Datei lesen
           const contents = await readFile(file as string);
           
-          // Sicherere Base64 Konvertierung für große Dateien
           let binary = '';
           const bytes = new Uint8Array(contents);
           const len = bytes.byteLength;
@@ -148,14 +145,16 @@ export const SettingsModal: React.FC<Props> = ({
           const base64 = btoa(binary);
           const dataUrl = `data:image/png;base64,${base64}`;
 
+          setCropImageSrc(dataUrl);
+          
           if (target === 'project') {
-              const proj = projects.find(p => p.id === idOrName);
-              if (proj) {
-                  onUpdateProject(proj.id, proj.name, proj.color, dataUrl, 'image');
-              }
-          } else if (target === 'app') {
-              alert("Benutzerdefinierte Icons für Apps sind in dieser Version noch nicht implementiert. Du kannst aber die Farbe ändern.");
+              setEditingProjId(idOrName as number);
+              setEditingAppName(null);
+          } else {
+              setEditingAppName(idOrName as string);
+              setEditingProjId(null);
           }
+
       } catch (e) {
           console.error("Fehler beim Icon-Update:", e);
           alert("Fehler beim Laden des Bildes.");
@@ -169,6 +168,7 @@ export const SettingsModal: React.FC<Props> = ({
       reader.addEventListener('load', () => {
         setCropImageSrc(reader.result as string);
         setEditingProjId(projId);
+        setEditingAppName(null);
       });
       reader.readAsDataURL(file);
     }
@@ -178,65 +178,58 @@ export const SettingsModal: React.FC<Props> = ({
     if (cropImageSrc && croppedAreaPixels) {
         try {
             const croppedImageBase64 = await getCroppedImg(cropImageSrc, croppedAreaPixels);
-            if (editingProjId === null) {
-                setNewProjIcon(croppedImageBase64);
-                setNewProjIconType('image');
-            } else {
+            
+            if (editingProjId !== null) {
                 const proj = projects.find(p => p.id === editingProjId);
                 if (proj) onUpdateProject(proj.id, proj.name, proj.color, croppedImageBase64, 'image');
+            } else if (editingAppName !== null) {
+                if (db) {
+                   const app = knownApps.find(a => a.name === editingAppName);
+                   if (app) {
+                       // FIX: saveAppConfig statt saveAppColor
+                       await saveAppConfig(db, editingAppName, app.color, croppedImageBase64);
+                       setKnownApps(prev => prev.map(a => a.name === editingAppName ? {...a, icon: croppedImageBase64} : a));
+                   }
+                }
+            } else {
+                setNewProjIcon(croppedImageBase64);
+                setNewProjIconType('image');
             }
+
             setCropImageSrc(null);
             setZoom(1);
+            setEditingProjId(null);
+            setEditingAppName(null);
+
         } catch (e) { console.error(e); }
     }
   };
 
   const handleAppColorChange = async (name: string, color: string) => {
       if (db) {
-          await saveAppColor(db, name, color);
+          // FIX: saveAppConfig statt saveAppColor
+          await saveAppConfig(db, name, color);
           setKnownApps(prev => prev.map(a => a.name === name ? {...a, color} : a));
       }
   };
 
   const handleDbUnlock = () => {
-      if (dbPasswordInput === settings.adminPassword) {
-          setIsDbUnlocked(true);
-          setDbPasswordInput("");
-      } else {
-          alert("Falsches Passwort!");
-      }
+      if (dbPasswordInput === settings.adminPassword) { setIsDbUnlocked(true); setDbPasswordInput(""); } else { alert("Falsches Passwort!"); }
   };
-
   const handleSetPassword = async () => {
-      if (!newPassword) return;
-      if (db) {
-          await saveSetting(db, 'adminPassword', newPassword);
-          setHasPassword(true);
-          onSaveSettings({...localSettings, adminPassword: newPassword});
-          alert("Passwortschutz aktiviert!");
-          setNewPassword("");
-      }
+      if (!newPassword || !db) return;
+      await saveSetting(db, 'adminPassword', newPassword);
+      setHasPassword(true); onSaveSettings({...localSettings, adminPassword: newPassword}); alert("Passwortschutz aktiviert!"); setNewPassword("");
   };
-
   const handleRemovePassword = async () => {
-      if (window.confirm("Passwortschutz wirklich entfernen?")) {
-          if (db) {
-              await saveSetting(db, 'adminPassword', "");
-              setHasPassword(false);
-              setIsDbUnlocked(true);
-              onSaveSettings({...localSettings, adminPassword: ""});
-          }
+      if (window.confirm("Passwortschutz wirklich entfernen?") && db) {
+          await saveSetting(db, 'adminPassword', "");
+          setHasPassword(false); setIsDbUnlocked(true); onSaveSettings({...localSettings, adminPassword: ""});
       }
   };
-
   const toggleHiddenDay = (dayIndex: number) => {
       const currentHidden = localSettings.hiddenDays || [];
-      let newHidden;
-      if (currentHidden.includes(dayIndex)) {
-          newHidden = currentHidden.filter(d => d !== dayIndex);
-      } else {
-          newHidden = [...currentHidden, dayIndex];
-      }
+      let newHidden = currentHidden.includes(dayIndex) ? currentHidden.filter(d => d !== dayIndex) : [...currentHidden, dayIndex];
       setLocalSettings({ ...localSettings, hiddenDays: newHidden });
   };
 
@@ -257,7 +250,7 @@ export const SettingsModal: React.FC<Props> = ({
                   <span style={{fontWeight: 'bold', color: 'white'}}>Zoom:</span>
                   <input type="range" value={zoom} min={1} max={3} step={0.1} onChange={(e) => setZoom(Number(e.target.value))} />
                   <button className="btn-secondary" onClick={() => setCropImageSrc(null)}><FaTimes /> Abbrechen</button>
-                  <button className="btn-save" onClick={saveCroppedImage}><FaCheck /> Übernehmen</button>
+                  <button className="btn-save" onClick={saveCroppedImage}><FaCheck /> √úbernehmen</button>
               </div>
           </div>
       )}
@@ -277,7 +270,7 @@ export const SettingsModal: React.FC<Props> = ({
                 <TabButton icon={<FaBriefcase />} label="Projekte" active={activeTab === 'projects'} onClick={() => setActiveTab('projects')} />
                 <TabButton icon={<FaPalette />} label="Activity Farben" active={activeTab === 'colors'} onClick={() => setActiveTab('colors')} />
                 <TabButton icon={<FaDatabase />} label="Datenbank" active={activeTab === 'database'} onClick={() => setActiveTab('database')} />
-                <TabButton icon={<FaInfoCircle />} label="Über" active={activeTab === 'about'} onClick={() => setActiveTab('about')} />
+                <TabButton icon={<FaInfoCircle />} label="√úber" active={activeTab === 'about'} onClick={() => setActiveTab('about')} />
             </div>
 
             <div style={{flex: 1, padding: '40px', overflowY: 'auto', background: 'var(--panel-bg)'}}>
@@ -288,22 +281,14 @@ export const SettingsModal: React.FC<Props> = ({
                             weekSchedule={localSettings.weekSchedule || getDefaultWeekSchedule()}
                             onChange={(schedule) => setLocalSettings({ ...localSettings, weekSchedule: schedule })}
                         />
-                        
                         <h3 className="settings-h3" style={{ marginTop: '40px', color: 'var(--text-color)' }}>Kalender Ansicht</h3>
-                        <p className="settings-desc" style={{color: 'var(--text-secondary)'}}>Wähle die Tage, die in der Wochenansicht angezeigt werden sollen.</p>
                         <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
                             {['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'].map((day, idx) => (
                                 <label key={idx} style={{display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', padding: '8px 12px', background: 'var(--bg-color)', borderRadius: '6px', border: '1px solid var(--border-color)', color: 'var(--text-color)'}}>
-                                    <input 
-                                        type="checkbox" 
-                                        checked={!(localSettings.hiddenDays || []).includes(idx)}
-                                        onChange={() => toggleHiddenDay(idx)}
-                                    />
-                                    {day}
+                                    <input type="checkbox" checked={!(localSettings.hiddenDays || []).includes(idx)} onChange={() => toggleHiddenDay(idx)} /> {day}
                                 </label>
                             ))}
                         </div>
-
                         <h3 className="settings-h3" style={{ marginTop: '40px', color: 'var(--text-color)' }}>Ziele</h3>
                         <div className="input-group">
                             <label className="input-label">Tagesziel (Stunden)</label>
@@ -318,35 +303,22 @@ export const SettingsModal: React.FC<Props> = ({
                         <div className="input-group" style={{marginBottom: '20px'}}>
                             <label className="input-label">Erscheinungsbild</label>
                             <div style={{display: 'flex', gap: '15px'}}>
-                                <button 
-                                    className="btn-secondary" 
-                                    style={{
-                                        background: !localSettings.darkMode ? '#3b82f6' : 'transparent', 
-                                        color: !localSettings.darkMode ? 'white' : 'var(--text-color)',
-                                        borderColor: !localSettings.darkMode ? '#3b82f6' : 'var(--border-color)'
-                                    }}
-                                    onClick={() => setLocalSettings({...localSettings, darkMode: false})}
-                                >
-                                    <FaSun /> Light Mode
-                                </button>
-                                <button 
-                                    className="btn-secondary" 
-                                    style={{
-                                        background: localSettings.darkMode ? '#3b82f6' : 'transparent', 
-                                        color: localSettings.darkMode ? 'white' : 'var(--text-color)',
-                                        borderColor: localSettings.darkMode ? '#3b82f6' : 'var(--border-color)'
-                                    }}
-                                    onClick={() => setLocalSettings({...localSettings, darkMode: true})}
-                                >
-                                    <FaMoon /> Dark Mode
-                                </button>
+                                <button className="btn-secondary" style={{background: !localSettings.darkMode ? '#3b82f6' : 'transparent', color: !localSettings.darkMode ? 'white' : 'var(--text-color)', borderColor: !localSettings.darkMode ? '#3b82f6' : 'var(--border-color)'}} onClick={() => setLocalSettings({...localSettings, darkMode: false})}><FaSun /> Light Mode</button>
+                                <button className="btn-secondary" style={{background: localSettings.darkMode ? '#3b82f6' : 'transparent', color: localSettings.darkMode ? 'white' : 'var(--text-color)', borderColor: localSettings.darkMode ? '#3b82f6' : 'var(--border-color)'}} onClick={() => setLocalSettings({...localSettings, darkMode: true})}><FaMoon /> Dark Mode</button>
                             </div>
                         </div>
 
                         <h3 className="settings-h3" style={{color: 'var(--text-color)'}}>Activity Stream</h3>
                         <div style={{marginBottom: '30px', background: 'var(--bg-color)', padding: '20px', borderRadius: '8px'}}>
-                            <label className="input-label">Gruppierung: {localSettings.groupingThreshold} Minuten</label>
-                            <input type="range" min="1" max="60" step="1" style={{width: '100%', marginTop: '10px'}} value={localSettings.groupingThreshold || 5} onChange={e => setLocalSettings({...localSettings, groupingThreshold: parseInt(e.target.value)})} />
+                            <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '10px'}}>
+                                <label className="input-label">Gruppierung</label>
+                                <span style={{fontWeight: 'bold', color: 'var(--primary)'}}>
+                                    {localSettings.groupingThreshold && localSettings.groupingThreshold > 60 
+                                        ? `${Math.floor(localSettings.groupingThreshold / 60)}h ${localSettings.groupingThreshold % 60}m` 
+                                        : `${localSettings.groupingThreshold || 5} Minuten`}
+                                </span>
+                            </div>
+                            <input type="range" min="1" max="240" step="1" style={{width: '100%', cursor: 'pointer'}} value={localSettings.groupingThreshold || 10} onChange={e => setLocalSettings({...localSettings, groupingThreshold: parseInt(e.target.value)})} />
                         </div>
                     </div>
                 )}
@@ -380,18 +352,8 @@ export const SettingsModal: React.FC<Props> = ({
                         <div style={{border: '1px solid var(--border-color)', borderRadius: '12px', overflow: 'hidden'}}>
                             {projects.map(p => (
                                 <div key={p.id} style={{display: 'flex', alignItems: 'center', padding: '15px', borderBottom: '1px solid var(--border-color)', background: 'var(--panel-bg)', gap: '15px'}}>
-                                    {/* ICON KLICKBAR MACHEN */}
-                                    <div 
-                                        className="icon-editable"
-                                        onClick={() => handleIconUpdate('project', p.id)}
-                                        title="Klicken um Icon zu ändern"
-                                        style={{width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-color)', borderRadius: '6px'}}
-                                    >
-                                        {p.iconType === 'image' ? (
-                                            <img src={p.icon || ''} alt="" style={{width: '100%', height: '100%', objectFit: 'contain'}} />
-                                        ) : (
-                                            <AppIcon appName={p.icon || p.name} fallbackColor={p.color} />
-                                        )}
+                                    <div className="icon-editable" onClick={() => handleIconUpdate('project', p.id)} title="Klicken um Icon zu √§ndern" style={{width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-color)', borderRadius: '6px'}}>
+                                        {p.iconType === 'image' ? <img src={p.icon || ''} alt="" style={{width: '100%', height: '100%', objectFit: 'contain'}} /> : <AppIcon appName={p.icon || p.name} fallbackColor={p.color} />}
                                     </div>
                                     <input type="color" value={p.color || '#000000'} onChange={(e) => onUpdateProject(p.id, p.name, e.target.value, p.icon, p.iconType as any)} style={{width: '30px', height: '30px', border: 'none', cursor: 'pointer', borderRadius: '50%'}} />
                                     <input className="input-text" value={p.name || ''} onChange={(e) => onUpdateProject(p.id, e.target.value, p.color, p.icon, p.iconType as any)} style={{flex: 1}} />
@@ -404,15 +366,15 @@ export const SettingsModal: React.FC<Props> = ({
 
                 {activeTab === 'colors' && (
                     <div>
-                        <h3 className="settings-h3" style={{color: 'var(--text-color)'}}>Activity Farben</h3>
-                        <p className="settings-desc" style={{color: 'var(--text-secondary)'}}>Hier kannst du Farben für erkannte Programme festlegen.</p>
+                        <h3 className="settings-h3" style={{color: 'var(--text-color)'}}>Activity Farben & Icons</h3>
+                        <p className="settings-desc" style={{color: 'var(--text-secondary)'}}>Klicke auf das Icon, um ein eigenes Bild hochzuladen.</p>
                         <input className="input-text" placeholder="Suchen..." value={appSearch} onChange={e => setAppSearch(e.target.value)} style={{marginBottom: '20px'}} />
                         
                         <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '10px', maxHeight: '400px', overflowY: 'auto'}}>
                             {knownApps.filter(a => a.name.toLowerCase().includes(appSearch.toLowerCase())).map(app => (
                                 <div key={app.name} style={{background: 'var(--bg-color)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '10px'}}>
-                                    <div style={{width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--panel-bg)', borderRadius: '6px'}}>
-                                        <AppIcon appName={app.name} fallbackColor={app.color} />
+                                    <div className="icon-editable" onClick={() => handleIconUpdate('app', app.name)} title="Klicken um Icon zu √§ndern" style={{width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--panel-bg)', borderRadius: '6px'}}>
+                                        {app.icon ? <img src={app.icon} alt="" style={{width: '100%', height: '100%', objectFit: 'contain'}} /> : <AppIcon appName={app.name} fallbackColor={app.color} />}
                                     </div>
                                     <div style={{flex: 1, overflow: 'hidden'}}>
                                         <div style={{fontSize: '0.9rem', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-color)'}} title={app.name}>{app.name}</div>
@@ -427,11 +389,10 @@ export const SettingsModal: React.FC<Props> = ({
                 {activeTab === 'database' && (
                     <div>
                         <h3 className="settings-h3" style={{color: 'var(--text-color)'}}>Datenbank Verwaltung</h3>
-                        
                         {!isDbUnlocked ? (
                             <div style={{background: 'var(--bg-color)', padding: '30px', borderRadius: '12px', textAlign: 'center', border: '1px solid var(--border-color)'}}>
                                 <FaLock size={32} style={{color: 'var(--text-secondary)', marginBottom: '15px'}} />
-                                <p style={{color: 'var(--text-color)'}}>Dieser Bereich ist geschützt.</p>
+                                <p style={{color: 'var(--text-color)'}}>Dieser Bereich ist gesch√ºtzt.</p>
                                 <div style={{display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '15px'}}>
                                     <input type="password" placeholder="Passwort" className="input-text" style={{width: '200px'}} value={dbPasswordInput} onChange={e => setDbPasswordInput(e.target.value)} />
                                     <button className="btn-save" onClick={handleDbUnlock}><FaUnlock /> Entsperren</button>
@@ -439,11 +400,9 @@ export const SettingsModal: React.FC<Props> = ({
                             </div>
                         ) : (
                             <div style={{animation: 'fadeIn 0.3s'}}>
-                                
                                 <div style={{marginBottom: '30px', padding: '20px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.3)'}}>
                                     <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
-                                        <FaKey color="#10b981" />
-                                        <span style={{fontWeight: 'bold', color: '#047857'}}>Sicherheit</span>
+                                        <FaKey color="#10b981" /> <span style={{fontWeight: 'bold', color: '#047857'}}>Sicherheit</span>
                                     </div>
                                     {hasPassword ? (
                                         <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
@@ -457,42 +416,22 @@ export const SettingsModal: React.FC<Props> = ({
                                         </div>
                                     )}
                                 </div>
-
                                 <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px'}}>
                                     <div className="dashboard-card" style={{alignItems: 'flex-start', background: 'var(--bg-color)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border-color)'}}>
-                                        <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
-                                            <FaHdd size={24} color="#3b82f6" />
-                                            <span style={{fontWeight: 'bold', color: 'var(--text-color)'}}>Backup</span>
-                                        </div>
+                                        <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}><FaHdd size={24} color="#3b82f6" /><span style={{fontWeight: 'bold', color: 'var(--text-color)'}}>Backup</span></div>
                                         <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '15px'}}>Erstelle eine Kopie der gesamten Datenbank.</p>
                                         <button className="btn-secondary" onClick={backupDatabase} style={{width: '100%'}}>Backup erstellen</button>
                                     </div>
-
                                     <div className="dashboard-card" style={{alignItems: 'flex-start', background: 'var(--bg-color)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border-color)'}}>
-                                        <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
-                                            <FaUndo size={24} color="#f59e0b" />
-                                            <span style={{fontWeight: 'bold', color: 'var(--text-color)'}}>Wiederherstellen</span>
-                                        </div>
-                                        <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '15px'}}>Lade ein Backup. ACHTUNG: Überschreibt alles!</p>
+                                        <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}><FaUndo size={24} color="#f59e0b" /><span style={{fontWeight: 'bold', color: 'var(--text-color)'}}>Wiederherstellen</span></div>
+                                        <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '15px'}}>Lade ein Backup. ACHTUNG: √úberschreibt alles!</p>
                                         <button className="btn-secondary" onClick={restoreDatabase} style={{width: '100%'}}>Backup laden</button>
                                     </div>
-
-                                    <div className="dashboard-card" style={{alignItems: 'flex-start', background: 'var(--bg-color)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border-color)'}}>
-                                        <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
-                                            <FaFileExcel size={24} color="#10b981" />
-                                            <span style={{fontWeight: 'bold', color: 'var(--text-color)'}}>Log Export</span>
-                                        </div>
-                                        <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '15px'}}>Exportiere ALLE rohen Activity-Logs als Excel.</p>
-                                        <button className="btn-secondary" onClick={() => db && exportAllLogsToExcel(db)} style={{width: '100%'}}>Logs exportieren</button>
-                                    </div>
                                 </div>
-
                                 <h3 className="settings-h3" style={{color: '#ef4444'}}>Gefahrenzone</h3>
                                 <div style={{border: '1px solid rgba(239, 68, 68, 0.3)', background: 'rgba(239, 68, 68, 0.1)', padding: '20px', borderRadius: '8px'}}>
-                                    <p className="settings-desc" style={{color: '#b91c1c'}}>Löscht alle Logs, Zeiten und Einstellungen unwiderruflich.</p>
-                                    <button onClick={() => { if(window.confirm("Wirklich ALLES löschen?")) onResetData(); }} style={{width: '100%', padding: '15px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer'}}>
-                                        <FaTrash /> Datenbank zurücksetzen
-                                    </button>
+                                    <p className="settings-desc" style={{color: '#b91c1c'}}>L√∂scht alle Logs, Zeiten und Einstellungen unwiderruflich.</p>
+                                    <button onClick={() => { if(window.confirm("Wirklich ALLES l√∂schen?")) onResetData(); }} style={{width: '100%', padding: '15px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer'}}><FaTrash /> Datenbank zur√ºcksetzen</button>
                                 </div>
                             </div>
                         )}
@@ -502,16 +441,10 @@ export const SettingsModal: React.FC<Props> = ({
                 {activeTab === 'about' && (
                     <div style={{textAlign: 'center', padding: '40px'}}>
                         <h2 style={{color: 'var(--text-color)', marginBottom: '10px'}}>ClockworkHero</h2>
-                        <div style={{fontSize: '1.2rem', color: 'var(--text-secondary)', marginBottom: '30px'}}>Version 0.9.2 Alpha</div>
-                        
+                        <div style={{fontSize: '1.2rem', color: 'var(--text-secondary)', marginBottom: '30px'}}>Version 0.9.3 beta</div>
                         <div style={{background: 'var(--bg-color)', padding: '30px', borderRadius: '12px', border: '1px solid var(--border-color)', maxWidth: '600px', margin: '0 auto', textAlign: 'left'}}>
                             <h4 style={{marginTop: 0, color: 'var(--text-color)'}}>MIT License</h4>
-                            <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.6'}}>
-                                Copyright (c) 2025 Sandro Ballarini
-                            </p>
-                            <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.6'}}>
-                                Permission is hereby granted, free of charge, to any person obtaining a copy...
-                            </p>
+                            <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.6'}}>Copyright (c) 2025 Sandro Ballarini</p>
                         </div>
                     </div>
                 )}

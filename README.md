@@ -584,18 +584,3 @@ Bei Fragen oder Problemen:
 **Entwickelt mit ❤️ für ClockworkHero**
 
 *Last updated: Dezember 2025*
-```
-
-
-### References
-
-1. **Markdown Dateien online bearbeiten | Seafile**. [https://de.seafile.com](https://de.seafile.com/support/benutzer/anleitung/seahub/markdown-dateien-online-bearbeiten/)
-2. **Stefans Weblog - Markdown-Spickzettel zum herunterladen**. [https://strobelstefan.de](https://strobelstefan.de/blog/2021/01/02/markdown-spickzettel-zum-herunterladen.html)
-3. **Formatieren von Text mit Markdown**. [https://support.zendesk.com](https://support.zendesk.com/hc/en-us/articles/4408846544922-Formatting-text-with-Markdown)
-4. **GitHub: Seiten mit Markdown gestalten | heise online**. [https://www.heise.de](https://www.heise.de/tipps-tricks/GitHub-Seiten-mit-Markdown-gestalten-4575536.html)
-5. **Markdown zum Schreiben von Dokumentation verwenden | Adobe Experience Cloud**. [https://experienceleague.adobe.com](https://experienceleague.adobe.com/de/docs/contributor/contributor-guide/writing-essentials/markdown)
-6. **Markdown Datei: Das müssen Sie über das Dateiformat wissen - CHIP**. [https://praxistipps.chip.de](https://praxistipps.chip.de/markdown-datei-das-muessen-sie-ueber-das-dateiformat-wissen_177557)
-7. **Markdown-Syntax für Dateien, Widgets, Wikis - Azure DevOps | Microsoft Learn**. [https://learn.microsoft.com](https://learn.microsoft.com/de-de/azure/devops/project/wiki/markdown-guidance?view=azure-devops)
-8. **Markdown in Google Docs, Google Präsentationen und Google Zeichnungen verwenden - Google Docs-Editoren-Hilfe**. [https://support.google.com](https://support.google.com/docs/answer/12014036?hl=de)
-9. **Markdown-Syntax - Elearning Template**. [https://fiw.hs-wismar.de](https://fiw.hs-wismar.de/storages/hs-wismar/_FIW/FAQ/IT-und-Infrastruktur/elearning-template/markdown-syntax.html)
-10. **Die besten Markdown-Editoren im Überblick | GoDaddy Blog**. [https://www.godaddy.com](https://www.godaddy.com/resources/de/texte-erstellen/die-besten-kostenlosen-markdown-editoren-im-ueberblick)

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import Database from '@tauri-apps/plugin-sql';
-import { FaPen, FaSave, FaCalendarDay, FaCalendarWeek, FaCog, FaChartPie } from 'react-icons/fa';
+// FIX: FaPlay und FaStop sind jetzt hier im Import enthalten
+import { FaPen, FaSave, FaCalendarDay, FaCalendarWeek, FaCog, FaChartPie, FaPlay, FaStop } from 'react-icons/fa';
 
 import { 
     initDatabase, logActiveWindow, loadAllEvents, loadProjects, 
@@ -20,6 +21,13 @@ import './App.css';
 
 interface WindowInfo { title: string; path: string; }
 
+interface TimerState {
+    isRunning: boolean;
+    startTime: number | null;
+    projectId: string;
+    description: string;
+}
+
 function App() {
   const [db, setDb] = useState<Database | null>(null);
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
@@ -31,7 +39,7 @@ function App() {
       workStart: "08:00", 
       workEnd: "17:00", 
       theme: "light", 
-      groupingThreshold: 5, 
+      groupingThreshold: 10, 
       dailyTarget: 8 
   });
   
@@ -43,6 +51,12 @@ function App() {
   const [selection, setSelection] = useState<{start: Date, end: Date} | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<number | undefined>(undefined);
 
+  // --- TIMER STATE ---
+  const [timerState, setTimerState] = useState<TimerState>({
+      isRunning: false, startTime: null, projectId: "", description: ""
+  });
+  const [timerDisplay, setTimerDisplay] = useState("00:00:00");
+
   const lastSavedTitle = useRef<string>("");
 
   useEffect(() => {
@@ -53,11 +67,16 @@ function App() {
         const loadedSettings = await loadSettings(database);
         setSettings(loadedSettings);
         
-        // Dark Mode beim Start anwenden
         if (loadedSettings.darkMode) {
             document.body.classList.add('dark-mode');
         } else {
             document.body.classList.remove('dark-mode');
+        }
+
+        // Timer State laden
+        const savedTimer = localStorage.getItem('clockwork_timer');
+        if (savedTimer) {
+            setTimerState(JSON.parse(savedTimer));
         }
 
         refreshData(database, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, loadedSettings.groupingThreshold);
@@ -66,13 +85,30 @@ function App() {
     start();
   }, []);
 
+  // Timer Interval
+  useEffect(() => {
+      let interval: any;
+      if (timerState.isRunning && timerState.startTime) {
+          interval = setInterval(() => {
+              const now = Date.now();
+              const diff = now - timerState.startTime!;
+              const date = new Date(diff);
+              // UTC verwenden, um Zeitzonenprobleme bei der Dauer zu vermeiden
+              const str = date.toISOString().substr(11, 8);
+              setTimerDisplay(str);
+          }, 1000);
+      } else {
+          setTimerDisplay("00:00:00");
+      }
+      return () => clearInterval(interval);
+  }, [timerState]);
+
   useEffect(() => {
     const unlistenPromise = listen('active-window-change', async (event) => {
       const info = event.payload as WindowInfo;
       const title = info.title || "Unbekannt";
       const path = info.path || "";
       
-      // Wir speichern den Titel in der DB, brauchen ihn aber nicht im React State (verhindert unnötige Re-Renders)
       if (db && title !== lastSavedTitle.current && title !== "Unbekannt") {
         try {
             await logActiveWindow(db, title, path);
@@ -148,14 +184,11 @@ function App() {
       if (db) {
           await saveSettings(db, newSettings);
           setSettings(newSettings);
-          
-          // Dark Mode sofort anwenden
           if (newSettings.darkMode) {
               document.body.classList.add('dark-mode');
           } else {
               document.body.classList.remove('dark-mode');
           }
-
           setShowSettings(false);
       }
   };
@@ -167,7 +200,6 @@ function App() {
       }
   };
 
-  // FIX: Explizite Typen für iconType ('app' | 'image'), damit TypeScript beim Build nicht meckert
   const handleUpdateProject = async (id: number, name: string, color: string, icon?: string, iconType?: 'app' | 'image') => {
       if (db) {
           await updateProject(db, id, name, color, icon, iconType);
@@ -182,10 +214,39 @@ function App() {
       }
   };
 
-  // FIX: Explizite Typen für iconType
   const handleAddProject = async (name: string, color: string, icon?: string, iconType?: 'app' | 'image') => {
       if (db && name) {
           await addProject(db, name, color, icon, iconType);
+          refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold);
+      }
+  };
+
+  // --- TIMER FUNCTIONS ---
+  const startTimer = () => {
+      if (!timerState.projectId) {
+          alert("Bitte wähle zuerst ein Projekt aus.");
+          return;
+      }
+      const newState = {
+          ...timerState,
+          isRunning: true,
+          startTime: Date.now()
+      };
+      setTimerState(newState);
+      localStorage.setItem('clockwork_timer', JSON.stringify(newState));
+  };
+
+  const stopTimer = async () => {
+      if (timerState.isRunning && timerState.startTime && db) {
+          const end = new Date();
+          const start = new Date(timerState.startTime);
+          
+          await saveSession(db, start, end, timerState.projectId, timerState.description);
+          
+          const newState = { isRunning: false, startTime: null, projectId: "", description: "" };
+          setTimerState(newState);
+          localStorage.removeItem('clockwork_timer');
+          
           refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold);
       }
   };
@@ -197,10 +258,12 @@ function App() {
         isOpen={showSessionModal}
         onClose={() => setShowSessionModal(false)}
         onSave={handleSaveSession}
+        onDelete={handleDeleteSession}
         onAddProject={handleAddProject}
         start={selection?.start || null}
         end={selection?.end || null}
         projects={projects}
+        editingSessionId={editingSessionId}
       />
 
       <ActivityDetailModal 
@@ -226,10 +289,50 @@ function App() {
       />
 
       <div className="app-header">
-        <div className="header-status">
-          <span className={`status-dot ${isEditMode ? 'active' : ''}`}></span>
-          {isEditMode ? 'Modus: Erfassung' : 'Modus: Analyse'}
+        <div className="header-left">
+            <div className="header-status">
+            <span className={`status-dot ${isEditMode ? 'active' : ''}`}></span>
+            {isEditMode ? 'Modus: Erfassung' : 'Modus: Analyse'}
+            </div>
+
+            {/* TIMER SECTION */}
+            <div className="timer-controls">
+                {!timerState.isRunning ? (
+                    <>
+                        <select 
+                            className="input-select" 
+                            style={{width: '150px', height: '32px', fontSize: '0.85rem'}}
+                            value={timerState.projectId}
+                            onChange={e => setTimerState({...timerState, projectId: e.target.value})}
+                        >
+                            <option value="">Projekt wählen...</option>
+                            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                        <input 
+                            className="input-text" 
+                            style={{width: '200px', height: '32px', fontSize: '0.85rem'}}
+                            placeholder="Was machst du gerade?"
+                            value={timerState.description}
+                            onChange={e => setTimerState({...timerState, description: e.target.value})}
+                        />
+                        <button className="btn-save" style={{padding: '6px 12px', height: '32px'}} onClick={startTimer}>
+                            <FaPlay size={10} /> Start
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <span style={{fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-secondary)'}}>
+                            Läuft: {projects.find(p => p.id.toString() === timerState.projectId)?.name}
+                        </span>
+                        <div className="timer-display">{timerDisplay}</div>
+                        <button className="btn-secondary" style={{padding: '6px 12px', height: '32px', borderColor: '#ef4444', color: '#ef4444'}} onClick={stopTimer}>
+                            <FaStop size={10} /> Stop
+                        </button>
+                    </>
+                )}
+            </div>
         </div>
+
         <div className="header-controls">
           <button onClick={() => setShowSettings(true)} style={{background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '8px'}} title="Einstellungen"><FaCog size={20} /></button>
           

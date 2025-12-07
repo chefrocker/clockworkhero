@@ -11,7 +11,6 @@ export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) 
   
   const addBlock = (dayIndex: number) => {
     const updated = [...weekSchedule];
-    // Deep copy des Tages, um Mutation zu vermeiden
     updated[dayIndex] = { 
         ...updated[dayIndex], 
         blocks: [...updated[dayIndex].blocks] 
@@ -60,11 +59,7 @@ export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) 
     updated[dayIndex] = { ...updated[dayIndex], isWorkday: !updated[dayIndex].isWorkday };
     
     if (!updated[dayIndex].isWorkday) {
-      // Wenn deaktiviert, keine Stunden
       updated[dayIndex].totalHours = 0;
-      // Wir behalten die Blöcke im Hintergrund oder löschen sie? 
-      // Besser: Wir lassen sie da, aber berechnen 0h, damit man sie beim Reaktivieren wieder hat.
-      // Oder wir setzen einen Standard-Block. Hier: Standard.
     } else if (updated[dayIndex].blocks.length === 0) {
       updated[dayIndex].blocks = [{
         id: `block-${Date.now()}`,
@@ -73,7 +68,6 @@ export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) 
       }];
       updated[dayIndex] = calculateDayHours(updated[dayIndex]);
     } else {
-        // Reaktiviert mit existierenden Blöcken -> neu berechnen
         updated[dayIndex] = calculateDayHours(updated[dayIndex]);
     }
     onChange(updated);
@@ -104,7 +98,6 @@ export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) 
   );
 };
 
-// --- HELPER: Stunden berechnen ---
 function calculateDayHours(day: DaySchedule): DaySchedule {
   if (!day.blocks || day.blocks.length === 0) {
     return { ...day, totalHours: 0 };
@@ -122,7 +115,6 @@ function calculateDayHours(day: DaySchedule): DaySchedule {
   return { ...day, totalHours: parseFloat((totalMinutes / 60).toFixed(2)) };
 }
 
-// --- SUB-COMPONENT: Tag-Karte ---
 interface DayCardProps {
   day: DaySchedule;
   dayIndex: number;
@@ -143,7 +135,6 @@ const DayCard: React.FC<DayCardProps> = ({ day, dayIndex, onToggleWorkday, onAdd
       transition: 'all 0.2s'
     }}>
       
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: day.isWorkday ? '15px' : '0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
@@ -181,7 +172,6 @@ const DayCard: React.FC<DayCardProps> = ({ day, dayIndex, onToggleWorkday, onAdd
         )}
       </div>
 
-      {/* Zeitblöcke */}
       {day.isWorkday && day.blocks.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {day.blocks.map(block => (
@@ -211,23 +201,21 @@ const DayCard: React.FC<DayCardProps> = ({ day, dayIndex, onToggleWorkday, onAdd
                 style={{ width: '100px', height: '32px', padding: '4px 8px' }}
               />
               
-              {day.blocks.length > 1 && (
-                <button
-                  onClick={() => onRemoveBlock(dayIndex, block.id)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#ef4444',
-                    cursor: 'pointer',
-                    padding: '5px',
-                    marginLeft: 'auto',
-                    display: 'flex', alignItems: 'center'
-                  }}
-                  title="Block entfernen"
-                >
-                  <FaTrash size={12} />
-                </button>
-              )}
+              <button
+                onClick={() => onRemoveBlock(dayIndex, block.id)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  padding: '5px',
+                  marginLeft: 'auto',
+                  display: 'flex', alignItems: 'center'
+                }}
+                title="Block entfernen"
+              >
+                <FaTrash size={12} />
+              </button>
             </div>
           ))}
         </div>

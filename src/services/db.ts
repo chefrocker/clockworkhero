@@ -1,10 +1,9 @@
 import Database from '@tauri-apps/plugin-sql';
-import { LogEntry, Project, ColorEntry, WorkSession, AppSettings, ActivitySubEvent } from '../types';
-// RE-EXPORTIEREN DAMIT SETTINGS MODAL SIE FINDET
+// FIX: Unused 'ColorEntry' entfernt
+import { LogEntry, Project, WorkSession, AppSettings, ActivitySubEvent } from '../types';
 import { exportSessionsToExcel, exportAllLogsToExcel, backupDatabase, restoreDatabase } from './exportService';
 import { getDashboardStats, DashboardStats } from './analyticsService';
 
-// WICHTIG: AppSettings muss exportiert werden!
 export { exportSessionsToExcel, exportAllLogsToExcel, backupDatabase, restoreDatabase, getDashboardStats };
 export type { DashboardStats, AppSettings }; 
 
@@ -40,7 +39,7 @@ export async function initDatabase(): Promise<Database> {
   const db = await Database.load("sqlite:tracker.db");
   
   await db.execute(`CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, exe_path TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
-  await db.execute(`CREATE TABLE IF NOT EXISTS app_colors (name TEXT PRIMARY KEY, color TEXT)`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS app_colors (name TEXT PRIMARY KEY, color TEXT, icon TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, color TEXT, icon TEXT, icon_type TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS work_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, description TEXT, start_time DATETIME, end_time DATETIME)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
@@ -48,6 +47,7 @@ export async function initDatabase(): Promise<Database> {
   try { await db.execute("ALTER TABLE logs ADD COLUMN exe_path TEXT"); } catch (e) {}
   try { await db.execute("ALTER TABLE projects ADD COLUMN icon TEXT"); } catch (e) {}
   try { await db.execute("ALTER TABLE projects ADD COLUMN icon_type TEXT"); } catch (e) {}
+  try { await db.execute("ALTER TABLE app_colors ADD COLUMN icon TEXT"); } catch (e) {}
   
   return db;
 }
@@ -58,7 +58,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   workEnd: "17:00",
   dailyTarget: 8,
   theme: "light",
-  groupingThreshold: 5
+  groupingThreshold: 10
 };
 
 export async function loadSettings(db: Database): Promise<AppSettings> {
@@ -91,7 +91,7 @@ export async function saveSettings(db: Database, settings: AppSettings) {
     await saveSetting(db, 'workStart', settings.workStart || "08:00");
     await saveSetting(db, 'workEnd', settings.workEnd || "17:00");
     await saveSetting(db, 'dailyTarget', (settings.dailyTarget || 8).toString());
-    await saveSetting(db, 'groupingThreshold', (settings.groupingThreshold || 5).toString());
+    await saveSetting(db, 'groupingThreshold', (settings.groupingThreshold || 10).toString());
     if (settings.adminPassword !== undefined) await saveSetting(db, 'adminPassword', settings.adminPassword);
     
     if (settings.weekSchedule) {
@@ -108,7 +108,7 @@ export async function resetDatabase(db: Database) {
   await db.execute("DELETE FROM settings");
 }
 
-export async function getKnownApps(db: Database): Promise<{name: string, color: string}[]> {
+export async function getKnownApps(db: Database): Promise<{name: string, color: string, icon?: string}[]> {
     const logs = await db.select<any[]>("SELECT DISTINCT title, exe_path FROM logs LIMIT 5000");
     const uniqueNames = new Set<string>();
     
@@ -118,27 +118,37 @@ export async function getKnownApps(db: Database): Promise<{name: string, color: 
 
     const result = [];
     for (const name of uniqueNames) {
-        const colorRow = await db.select<any[]>("SELECT color FROM app_colors WHERE name = $1", [name]);
-        const color = colorRow.length > 0 ? colorRow[0].color : stringToColor(name);
-        result.push({ name, color });
+        const configRow = await db.select<any[]>("SELECT color, icon FROM app_colors WHERE name = $1", [name]);
+        const color = configRow.length > 0 ? configRow[0].color : stringToColor(name);
+        const icon = configRow.length > 0 ? configRow[0].icon : undefined;
+        result.push({ name, color, icon });
     }
     return result.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function saveAppColor(db: Database, appName: string, color: string) {
-    await db.execute("INSERT OR REPLACE INTO app_colors (name, color) VALUES ($1, $2)", [appName, color]);
+// FIX: Diese Funktion heißt jetzt saveAppConfig und speichert auch Icons
+export async function saveAppConfig(db: Database, appName: string, color: string, icon?: string) {
+    const existing = await db.select<any[]>("SELECT * FROM app_colors WHERE name = $1", [appName]);
+    let newColor = color;
+    let newIcon = icon;
+
+    if (existing.length > 0) {
+        if (!newColor) newColor = existing[0].color;
+        if (newIcon === undefined) newIcon = existing[0].icon; 
+    }
+
+    await db.execute("INSERT OR REPLACE INTO app_colors (name, color, icon) VALUES ($1, $2, $3)", [appName, newColor, newIcon]);
 }
 
 // --- PROJECTS ---
 export async function loadProjects(db: Database): Promise<Project[]> {
-  // WICHTIG: Mapping von DB (snake_case) zu TS (camelCase)
   const rows = await db.select<any[]>("SELECT * FROM projects");
   return rows.map(row => ({
       id: row.id,
       name: row.name,
       color: row.color,
       icon: row.icon,
-      iconType: row.icon_type as 'app' | 'image' // Mapping hier!
+      iconType: row.icon_type as 'app' | 'image'
   }));
 }
 
@@ -191,15 +201,17 @@ export async function deleteSession(db: Database, id: string) {
 // --- LOAD ALL EVENTS ---
 export async function loadAllEvents(db: Database, editMode: boolean, groupingThresholdMinutes: number): Promise<any[]> {
   const allEvents = [];
-  const colorCache = new Map<string, string>();
-  const colors = await db.select<ColorEntry[]>("SELECT * FROM app_colors");
-  colors.forEach(c => colorCache.set(c.name, c.color));
+  
+  const appConfigCache = new Map<string, {color: string, icon?: string}>();
+  const configs = await db.select<any[]>("SELECT name, color, icon FROM app_colors");
+  configs.forEach(c => appConfigCache.set(c.name, {color: c.color, icon: c.icon}));
 
-  async function getColor(name: string) {
-    if (colorCache.has(name)) return colorCache.get(name)!;
+  async function getAppConfig(name: string) {
+    if (appConfigCache.has(name)) return appConfigCache.get(name)!;
     const c = stringToColor(name);
-    colorCache.set(name, c);
-    return c;
+    const config = { color: c, icon: undefined };
+    appConfigCache.set(name, config);
+    return config;
   }
 
   const logs = await db.select<LogEntry[]>("SELECT * FROM logs ORDER BY created_at ASC LIMIT 15000");
@@ -229,7 +241,7 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
             currentGroup.subEvents.push({ time: logTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}), title: log.title });
         }
       } else {
-        const color = await getColor(currentGroup.appName);
+        const config = await getAppConfig(currentGroup.appName);
         if (currentGroup.end > currentGroup.start) {
             allEvents.push({
               id: 'auto-group-' + i,
@@ -237,13 +249,14 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
               start: currentGroup.start,
               end: currentGroup.end,
               display: 'block',
-              backgroundColor: color,
+              backgroundColor: config.color,
               extendedProps: {
                 type: 'auto',
                 order: 2,
                 simpleName: currentGroup.appName,
                 exePath: currentGroup.exePath,
-                appColor: color,
+                appColor: config.color,
+                appIcon: config.icon,
                 subEvents: currentGroup.subEvents,
                 isEditMode: editMode
               }
@@ -258,20 +271,21 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
         };
       }
     }
-    const color = await getColor(currentGroup.appName);
+    const config = await getAppConfig(currentGroup.appName);
     allEvents.push({
         id: 'auto-group-last',
         title: currentGroup.appName,
         start: currentGroup.start,
         end: currentGroup.end,
         display: 'block',
-        backgroundColor: color,
+        backgroundColor: config.color,
         extendedProps: {
           type: 'auto',
           order: 2,
           simpleName: currentGroup.appName,
           exePath: currentGroup.exePath,
-          appColor: color,
+          appColor: config.color,
+          appIcon: config.icon,
           subEvents: currentGroup.subEvents,
           isEditMode: editMode
         }
@@ -300,7 +314,6 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
         projectName: name,
         projectColor: color,
         projectIcon: project?.icon,
-        // FIX: Hier greifen wir auf das bereits gemappte iconType zu
         projectIconType: project?.iconType,
         description: session.description
       }

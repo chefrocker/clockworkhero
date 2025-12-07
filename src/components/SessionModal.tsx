@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { FaClock, FaSave, FaTimes, FaPlus } from 'react-icons/fa';
+import { FaClock, FaSave, FaTimes, FaPlus, FaTrash } from 'react-icons/fa';
 import { Project } from '../types';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSave: (projectId: string, desc: string, start: Date, end: Date) => void;
-  onAddProject: (name: string, color: string, icon?: string, iconType?: 'app' | 'image') => void; // NEU
+  onDelete?: (id: string) => void; // NEU: Delete Callback
+  onAddProject: (name: string, color: string, icon?: string, iconType?: 'app' | 'image') => void;
   start: Date | null;
   end: Date | null;
   projects: Project[];
+  editingSessionId?: number; // NEU: Um zu wissen, ob wir editieren
 }
 
-export const SessionModal: React.FC<Props> = ({ isOpen, onClose, onSave, onAddProject, start, end, projects }) => {
+export const SessionModal: React.FC<Props> = ({ isOpen, onClose, onSave, onDelete, onAddProject, start, end, projects, editingSessionId }) => {
   const [projectId, setProjectId] = useState("");
   const [description, setDescription] = useState("");
   
@@ -20,7 +22,6 @@ export const SessionModal: React.FC<Props> = ({ isOpen, onClose, onSave, onAddPr
   const [endTime, setEndTime] = useState("");
   const [durationMin, setDurationMin] = useState(0);
 
-  // Quick Create State
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
 
@@ -86,14 +87,8 @@ export const SessionModal: React.FC<Props> = ({ isOpen, onClose, onSave, onAddPr
 
   const handleQuickCreateProject = () => {
       if (newProjectName.trim()) {
-          // Wir erstellen das Projekt. Da wir die ID noch nicht kennen (async DB), 
-          // verlassen wir uns darauf, dass App.tsx die Liste aktualisiert.
-          // Fürs erste speichern wir ohne ID, oder wir warten.
-          // Einfacher: Wir rufen onAddProject auf.
-          onAddProject(newProjectName, "#3498db", "", "app"); // Standardfarbe Blau
+          onAddProject(newProjectName, "#3498db", "", "app");
           setIsCreatingProject(false);
-          // Hinweis: Das neue Projekt ist erst nach Re-Render in der Liste.
-          // User muss es dann auswählen.
       }
   };
 
@@ -106,26 +101,32 @@ export const SessionModal: React.FC<Props> = ({ isOpen, onClose, onSave, onAddPr
       }
   };
 
+  const handleDelete = () => {
+      if (onDelete && editingSessionId) {
+          if (window.confirm("Möchtest du diesen Eintrag wirklich löschen?")) {
+              onDelete(`manual-${editingSessionId}`);
+              onClose();
+          }
+      }
+  };
+
   if (!isOpen) return null;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()} style={{width: '700px'}}> {/* BREITER */}
+      <div className="modal-content" onClick={e => e.stopPropagation()} style={{width: '700px'}}>
         
         <div className="modal-header">
           <FaClock size={20} />
-          <h2>Arbeitszeit erfassen</h2>
+          <h2>{editingSessionId ? 'Eintrag bearbeiten' : 'Arbeitszeit erfassen'}</h2>
         </div>
 
         <div className="modal-body">
-          
-          {/* ZEITEN REIHE (GRID) - Exakt ausgerichtet */}
           <div style={{
               display: 'grid', 
               gridTemplateColumns: '1fr 1fr 1fr', 
               gap: '20px', 
-              marginBottom: '25px',
-              alignItems: 'end' // Wichtig damit Labels und Inputs fluchten
+              marginBottom: '25px'
           }}>
               <div className="input-group">
                   <label className="input-label">Von</label>
@@ -143,7 +144,6 @@ export const SessionModal: React.FC<Props> = ({ isOpen, onClose, onSave, onAddPr
 
           <div className="input-group" style={{marginBottom: '20px'}}>
             <label className="input-label">Projekt</label>
-            
             {!isCreatingProject ? (
                 <div style={{display: 'flex', gap: '10px'}}>
                     <select 
@@ -178,7 +178,7 @@ export const SessionModal: React.FC<Props> = ({ isOpen, onClose, onSave, onAddPr
             <label className="input-label">Beschreibung</label>
             <textarea 
               className="input-text"
-              style={{height: '100px', resize: 'none'}} // Größeres Textfeld
+              style={{height: '100px', resize: 'none'}}
               placeholder="Was hast du erledigt?"
               value={description}
               onChange={e => setDescription(e.target.value)}
@@ -186,9 +186,21 @@ export const SessionModal: React.FC<Props> = ({ isOpen, onClose, onSave, onAddPr
           </div>
         </div>
 
-        <div className="modal-footer">
-          <button className="btn-close" onClick={onClose}><FaTimes /> Abbrechen</button>
-          <button className="btn-save" onClick={handleSave}><FaSave /> Speichern</button>
+        <div className="modal-footer" style={{justifyContent: 'space-between'}}>
+          {/* LÖSCHEN BUTTON (Links) */}
+          <div>
+              {editingSessionId && (
+                  <button className="btn-secondary" onClick={handleDelete} style={{color: '#ef4444', borderColor: '#ef4444'}}>
+                      <FaTrash /> Löschen
+                  </button>
+              )}
+          </div>
+          
+          {/* RECHTE BUTTONS */}
+          <div style={{display: 'flex', gap: '12px'}}>
+            <button className="btn-close" onClick={onClose}><FaTimes /> Abbrechen</button>
+            <button className="btn-save" onClick={handleSave}><FaSave /> Speichern</button>
+          </div>
         </div>
       </div>
     </div>
