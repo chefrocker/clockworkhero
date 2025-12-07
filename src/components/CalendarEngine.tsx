@@ -9,7 +9,7 @@ import { DaySchedule } from '../types';
 
 interface Props {
   events: any[];
-  isEditMode: boolean;
+  isEditMode: boolean; // Wird jetzt genutzt für CSS-Klassen
   viewMode: 'day' | 'week';
   onDateSelect: (info: any) => void;
   onEventClick: (info: any) => void;
@@ -20,7 +20,7 @@ interface Props {
   workEnd: string;
   scrollTime: string;
   hiddenDays?: number[];
-  weekSchedule?: DaySchedule[]; // NEU
+  weekSchedule?: DaySchedule[];
 }
 
 export const CalendarEngine: React.FC<Props> = ({ 
@@ -57,7 +57,9 @@ export const CalendarEngine: React.FC<Props> = ({
           };
       }
 
-      const hours = [];
+      // WICHTIG: Typisierung für das Array hinzufügen
+      const hours: { daysOfWeek: number[]; startTime: string; endTime: string; }[] = [];
+      
       // FullCalendar: 0=Sun, 1=Mon...
       // Unser Array: 0=Mon, 1=Tue... 6=Sun
       weekSchedule.forEach((day, idx) => {
@@ -113,7 +115,7 @@ export const CalendarEngine: React.FC<Props> = ({
                 allDaySlot={false}
                 
                 hiddenDays={hiddenDays || []}
-                businessHours={getBusinessHours()} // NEU: Dynamisch
+                businessHours={getBusinessHours()}
                 
                 height="100%"
                 slotDuration="00:15:00"
@@ -123,7 +125,12 @@ export const CalendarEngine: React.FC<Props> = ({
                 eventClick={onEventClick}
                 eventDrop={onEventDrop}
                 eventResize={onEventResize}
-                eventClassNames={(arg) => arg.event.extendedProps.type === 'auto' ? ['auto-event'] : ['manual-event']}
+                // HIER nutzen wir isEditMode, damit der Fehler verschwindet und es Sinn macht
+                eventClassNames={(arg) => {
+                    const classes = arg.event.extendedProps.type === 'auto' ? ['auto-event'] : ['manual-event'];
+                    if (isEditMode) classes.push('mode-edit');
+                    return classes;
+                }}
             />
         </div>
     </div>
