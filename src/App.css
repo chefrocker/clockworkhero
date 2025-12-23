@@ -23,6 +23,9 @@
   --cal-non-business: #ffffff;
   --cal-now-line: #ef4444;
 
+  /* DYNAMISCHE HÖHE FÜR ZOOM (Standard: 60px) */
+  --slot-height: 60px;
+
   /* Status Colors */
   --success: #10b981;
   --danger: #ef4444;
@@ -95,11 +98,7 @@ html, body, #root {
   gap: 20px;
 }
 
-.header-left {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
+.header-left { display: flex; align-items: center; gap: 15px; }
 
 .header-status { 
   font-size: 0.95rem; 
@@ -120,25 +119,30 @@ html, body, #root {
 
 .header-controls { display: flex; gap: 10px; align-items: center; }
 
-/* TIMER SECTION */
+/* TIMER SECTION & HEADER INPUTS FIX */
 .timer-controls {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--bg-color);
-    padding: 4px 8px;
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg-color); padding: 4px 8px;
+    border-radius: 8px; border: 1px solid var(--border-color);
 }
 
+/* WICHTIG: Einheitliche Höhe für Header Inputs */
+.header-input {
+    height: 38px !important; /* Erzwingt gleiche Höhe */
+    padding: 0 12px !important;
+    font-size: 0.9rem !important;
+    border-radius: 6px !important;
+    border: 1px solid var(--border-color) !important;
+    background: var(--input-bg) !important;
+    color: var(--text-color) !important;
+    box-sizing: border-box !important;
+    line-height: normal !important; /* Reset line-height für Flexbox */
+}
+.header-input:focus { outline: none; border-color: var(--primary) !important; }
+
 .timer-display {
-    font-family: 'Courier New', monospace;
-    font-weight: bold;
-    font-size: 1.1rem;
-    color: var(--primary);
-    padding: 0 10px;
-    min-width: 80px;
-    text-align: center;
+    font-family: 'Courier New', monospace; font-weight: bold; font-size: 1.1rem;
+    color: var(--primary); padding: 0 10px; min-width: 80px; text-align: center;
 }
 
 /* =========================================
@@ -223,7 +227,7 @@ button {
 /* Einheitliches Styling für alle Input-Typen */
 .input-text, .input-select, .input-time, .input-number, textarea.input-text { 
   width: 100%; 
-  padding: 0 12px; /* Padding nur links/rechts, Höhe regelt vertical */
+  padding: 0 12px; 
   border-radius: 8px; 
   border: 1px solid var(--border-color); 
   font-size: 0.95rem; 
@@ -231,10 +235,10 @@ button {
   color: var(--text-color);
   transition: border 0.2s, box-shadow 0.2s;
   box-sizing: border-box; 
-  height: 42px; /* Einheitliche Höhe erzwingen */
-  line-height: 40px; /* Vertikale Zentrierung */
+  height: 42px; 
+  line-height: 40px; 
   font-family: inherit;
-  appearance: none; /* Browser-Styles entfernen */
+  appearance: none; 
 }
 
 /* Speziell für Textarea */
@@ -313,16 +317,46 @@ textarea.input-text {
 .fc-col-header-cell-cushion { color: var(--text-color); font-weight: 700; padding: 10px 0; }
 .fc-timegrid-slot-label-cushion { color: var(--text-secondary); font-size: 0.85rem; font-weight: 600; }
 .fc-timegrid-axis-cushion { color: var(--text-secondary); }
-.fc-timegrid-slot { height: 50px !important; border-bottom: 1px solid var(--cal-grid); }
+
+/* WICHTIG: Hier nutzen wir jetzt die Variable für den Zoom */
+.fc-timegrid-slot { 
+    height: var(--slot-height) !important; 
+    border-bottom: 1px solid var(--cal-grid); 
+}
+
 .fc-business-container { background-color: var(--cal-business-hours) !important; pointer-events: none; }
 .fc .fc-timegrid-col-bg { background: var(--cal-non-business); }
 .fc-now-indicator-line { border-color: var(--cal-now-line) !important; border-width: 2px !important; }
 .fc-now-indicator-arrow { border-color: var(--cal-now-line) !important; }
 .fc-event { border: none !important; background: transparent !important; box-shadow: none !important; margin: 0 2px !important; overflow: visible !important; }
 
+/* ... (Vorheriger CSS Code) ... */
+
 /* =========================================
    8. EVENT RENDERER STYLES
    ========================================= */
+
+/* Auto Event Container */
+.auto-event-container {
+    border-radius: 6px;
+    overflow: hidden;
+    height: 100%;
+    position: relative;
+    transition: all 0.2s ease;
+    border-top: 1px solid rgba(0,0,0,0.05);
+    border-right: 1px solid rgba(0,0,0,0.05);
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+/* Hover Effekt */
+.auto-event-container:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    z-index: 10;
+}
+
+/* Manuelle Sessions */
 .manual-session-block {
   display: flex; flex-direction: column; justify-content: center;
   padding: 4px 8px; height: 100%; width: 100%;
@@ -332,18 +366,18 @@ textarea.input-text {
   z-index: 50; position: relative;
   transition: transform 0.1s, box-shadow 0.1s;
   color: white; 
+  overflow: hidden;
 }
 .manual-session-block:hover { transform: translateY(-1px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); z-index: 100; }
 
-.auto-event-block { border-radius: 6px; overflow: hidden; }
-.edit-mode-auto { opacity: 0.4 !important; filter: grayscale(100%); pointer-events: none !important; }
 .watermark-icon { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); }
 
-.fc-timeGridWeek-view .manual-session-block { padding: 2px 4px; }
-.fc-timeGridWeek-view .manual-session-title { font-size: 0.75rem; }
-.fc-timeGridWeek-view .manual-session-desc { display: none; }
+/* ... (Restlicher CSS Code) ... */
 
-/* Dashboard Cards */
+
+/* =========================================
+   9. DASHBOARD STYLES
+   ========================================= */
 .dashboard-card {
     background: var(--panel-bg); padding: 20px; border-radius: 12px;
     box-shadow: var(--shadow); border: 1px solid var(--border-color); color: var(--text-color);
@@ -357,12 +391,3 @@ textarea.input-text {
 }
 .panel-title { color: var(--text-color); margin-bottom: 20px; font-weight: 700; }
 .section-title { color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem; margin: 30px 0 15px 0; }
-
-
-/* =========================================
-   7. FULLCALENDAR CUSTOMIZATION
-   ========================================= */
-.fc { height: 100%; background-color: var(--panel-bg); }
-
-/* WICHTIG: Hier wurde die Höhe verdreifacht (50px -> 150px) */
-.fc-timegrid-slot { height: 150px !important; border-bottom: 1px solid var(--cal-grid); } 

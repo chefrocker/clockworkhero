@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import Database from '@tauri-apps/plugin-sql';
-// FIX: FaPlay und FaStop sind jetzt hier im Import enthalten
 import { FaPen, FaSave, FaCalendarDay, FaCalendarWeek, FaCog, FaChartPie, FaPlay, FaStop } from 'react-icons/fa';
 
 import { 
@@ -33,8 +32,11 @@ function App() {
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   
+  // isEditMode = true -> "Eingabemodus" (Icons rechts, Platz für neue Einträge)
+  // isEditMode = false -> "ActivityCards Modus" (Breite Karten zur Ansicht)
   const [isEditMode, setIsEditMode] = useState(false);
-  const [viewMode, setViewMode] = useState<'day' | 'week' | 'dashboard'>('day');
+  
+  const [viewMode, setViewMode] = useState<'day' | 'week' | 'dashboard'>('week');
   const [settings, setSettings] = useState<AppSettings>({ 
       workStart: "08:00", 
       workEnd: "17:00", 
@@ -51,13 +53,15 @@ function App() {
   const [selection, setSelection] = useState<{start: Date, end: Date} | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<number | undefined>(undefined);
 
-  // --- TIMER STATE ---
+  // Timer State
   const [timerState, setTimerState] = useState<TimerState>({
       isRunning: false, startTime: null, projectId: "", description: ""
   });
   const [timerDisplay, setTimerDisplay] = useState("00:00:00");
-
   const lastSavedTitle = useRef<string>("");
+  
+  // ScrollTime State (Startet bei aktueller Stunde)
+  const [initialScrollTime, setInitialScrollTime] = useState("08:00:00");
 
   useEffect(() => {
     async function start() {
@@ -79,6 +83,11 @@ function App() {
             setTimerState(JSON.parse(savedTimer));
         }
 
+        // Aktuelle Zeit für ScrollTime setzen
+        const now = new Date();
+        const currentHour = now.getHours().toString().padStart(2, '0');
+        setInitialScrollTime(`${currentHour}:00:00`);
+
         refreshData(database, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, loadedSettings.groupingThreshold);
       } catch (e) { console.error("DB Init Error:", e); }
     }
@@ -93,16 +102,14 @@ function App() {
               const now = Date.now();
               const diff = now - timerState.startTime!;
               const date = new Date(diff);
-              // UTC verwenden, um Zeitzonenprobleme bei der Dauer zu vermeiden
               const str = date.toISOString().substr(11, 8);
               setTimerDisplay(str);
           }, 1000);
-      } else {
-          setTimerDisplay("00:00:00");
-      }
+      } else { setTimerDisplay("00:00:00"); }
       return () => clearInterval(interval);
   }, [timerState]);
 
+  // Active Window Listener
   useEffect(() => {
     const unlistenPromise = listen('active-window-change', async (event) => {
       const info = event.payload as WindowInfo;
@@ -119,6 +126,7 @@ function App() {
     return () => { unlistenPromise.then(unlisten => unlisten()); };
   }, [db]);
 
+  // Refresh bei Modus-Wechsel
   useEffect(() => { 
       if (db && viewMode !== 'dashboard') {
           refreshData(db, isEditMode, viewMode, settings.groupingThreshold); 
@@ -221,7 +229,6 @@ function App() {
       }
   };
 
-  // --- TIMER FUNCTIONS ---
   const startTimer = () => {
       if (!timerState.projectId) {
           alert("Bitte wähle zuerst ein Projekt aus.");
@@ -292,16 +299,15 @@ function App() {
         <div className="header-left">
             <div className="header-status">
             <span className={`status-dot ${isEditMode ? 'active' : ''}`}></span>
-            {isEditMode ? 'Modus: Erfassung' : 'Modus: Analyse'}
+            {isEditMode ? 'Modus: Eingabe' : 'Modus: ActivityCards'}
             </div>
 
-            {/* TIMER SECTION */}
             <div className="timer-controls">
                 {!timerState.isRunning ? (
                     <>
                         <select 
-                            className="input-select" 
-                            style={{width: '150px', height: '32px', fontSize: '0.85rem'}}
+                            className="header-input" 
+                            style={{width: '150px'}}
                             value={timerState.projectId}
                             onChange={e => setTimerState({...timerState, projectId: e.target.value})}
                         >
@@ -309,13 +315,13 @@ function App() {
                             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                         <input 
-                            className="input-text" 
-                            style={{width: '200px', height: '32px', fontSize: '0.85rem'}}
+                            className="header-input" 
+                            style={{width: '200px'}}
                             placeholder="Was machst du gerade?"
                             value={timerState.description}
                             onChange={e => setTimerState({...timerState, description: e.target.value})}
                         />
-                        <button className="btn-save" style={{padding: '6px 12px', height: '32px'}} onClick={startTimer}>
+                        <button className="btn-save header-input" style={{padding: '0 16px'}} onClick={startTimer}>
                             <FaPlay size={10} /> Start
                         </button>
                     </>
@@ -325,7 +331,7 @@ function App() {
                             Läuft: {projects.find(p => p.id.toString() === timerState.projectId)?.name}
                         </span>
                         <div className="timer-display">{timerDisplay}</div>
-                        <button className="btn-secondary" style={{padding: '6px 12px', height: '32px', borderColor: '#ef4444', color: '#ef4444'}} onClick={stopTimer}>
+                        <button className="btn-secondary header-input" style={{padding: '0 16px', borderColor: '#ef4444', color: '#ef4444'}} onClick={stopTimer}>
                             <FaStop size={10} /> Stop
                         </button>
                     </>
@@ -342,7 +348,15 @@ function App() {
               <button onClick={() => setViewMode('dashboard')} style={{background: viewMode === 'dashboard' ? 'var(--bg-color)' : 'transparent', boxShadow: viewMode === 'dashboard' ? 'var(--shadow)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: 'var(--text-color)'}}><FaChartPie /> Auswertung</button>
           </div>
 
-          <button className={`btn-toggle ${isEditMode ? 'active' : ''}`} onClick={() => setIsEditMode(!isEditMode)}>{isEditMode ? <FaSave /> : <FaPen />}{isEditMode ? 'Erfassung beenden' : 'Zeiten erfassen'}</button>
+          <button 
+            className={`btn-toggle ${isEditMode ? 'active' : ''}`} 
+            onClick={() => setIsEditMode(!isEditMode)}
+            style={{minWidth: '180px', justifyContent: 'center'}}
+          >
+            {isEditMode ? <FaPen /> : <FaChartPie />}
+            {isEditMode ? 'Modus: Eingabe' : 'Modus: ActivityCards'}
+          </button>
+          
           <button className="btn-refresh" onClick={() => db && refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold)}>Refresh</button>
         </div>
       </div>
@@ -362,7 +376,7 @@ function App() {
               onEventResize={handleEventChange}
               workStart={settings.workStart}
               workEnd={settings.workEnd}
-              scrollTime={settings.workStart + ":00"}
+              scrollTime={initialScrollTime}
               hiddenDays={settings.hiddenDays}
               weekSchedule={settings.weekSchedule}
             />

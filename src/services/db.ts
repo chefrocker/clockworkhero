@@ -1,5 +1,4 @@
 import Database from '@tauri-apps/plugin-sql';
-// FIX: Unused 'ColorEntry' entfernt
 import { LogEntry, Project, WorkSession, AppSettings, ActivitySubEvent } from '../types';
 import { exportSessionsToExcel, exportAllLogsToExcel, backupDatabase, restoreDatabase } from './exportService';
 import { getDashboardStats, DashboardStats } from './analyticsService';
@@ -7,31 +6,53 @@ import { getDashboardStats, DashboardStats } from './analyticsService';
 export { exportSessionsToExcel, exportAllLogsToExcel, backupDatabase, restoreDatabase, getDashboardStats };
 export type { DashboardStats, AppSettings }; 
 
-// --- HELPER ---
+// --- HELPER: PROZESS-BASIERTE ERKENNUNG ---
+
+// Mapping von Exe-Namen zu schönen Anzeigenamen
+const EXE_MAPPING: Record<string, string> = {
+    'notepad++.exe': 'Notepad++',
+    'chrome.exe': 'Google Chrome',
+    'firefox.exe': 'Firefox',
+    'msedge.exe': 'Edge',
+    'code.exe': 'VS Code',
+    'winword.exe': 'Word',
+    'excel.exe': 'Excel',
+    'powerpnt.exe': 'PowerPoint',
+    'outlook.exe': 'Outlook',
+    'onenote.exe': 'OneNote',
+    'teams.exe': 'Teams',
+    'spotify.exe': 'Spotify',
+    'discord.exe': 'Discord',
+    'whatsapp.exe': 'WhatsApp',
+    'slack.exe': 'Slack',
+    'explorer.exe': 'Explorer',
+    'cmd.exe': 'Terminal',
+    'powershell.exe': 'Terminal'
+};
+
+function getAppNameFromPath(path: string, title: string): string {
+    if (!path) return title || "Unbekannt";
+
+    // 1. Dateinamen aus Pfad extrahieren (z.B. "C:\Program Files\App\app.exe" -> "app.exe")
+    // Wir splitten sowohl nach \ als auch / um sicherzugehen
+    const parts = path.split(/[/\\]/);
+    const filename = parts[parts.length - 1].toLowerCase();
+
+    // 2. Prüfen ob wir ein schönes Mapping haben
+    if (EXE_MAPPING[filename]) {
+        return EXE_MAPPING[filename];
+    }
+
+    // 3. Fallback: .exe entfernen und den ersten Buchstaben groß machen
+    let cleanName = filename.replace('.exe', '');
+    return cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+}
+
 function stringToColor(str: string) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
   const h = Math.abs(hash) % 360;
   return `hsl(${h}, 70%, 85%)`; 
-}
-
-function simplifyAppName(title: string): string {
-  const t = title.toLowerCase();
-  if (t.includes('chrome')) return 'Google Chrome';
-  if (t.includes('firefox')) return 'Firefox';
-  if (t.includes('edge')) return 'Edge';
-  if (t.includes('code') || t.includes('visual studio')) return 'VS Code';
-  if (t.includes('word')) return 'Word';
-  if (t.includes('excel')) return 'Excel';
-  if (t.includes('powerpoint')) return 'PowerPoint';
-  if (t.includes('spotify')) return 'Spotify';
-  if (t.includes('discord')) return 'Discord';
-  if (t.includes('teams')) return 'Microsoft Teams';
-  if (t.includes('explorer')) return 'Explorer';
-  
-  const parts = title.split('\\');
-  const lastPart = parts[parts.length - 1];
-  return lastPart.replace('.exe', '').split(' - ')[0].trim() || title; 
 }
 
 // --- INIT ---
@@ -54,17 +75,12 @@ export async function initDatabase(): Promise<Database> {
 
 // --- SETTINGS ---
 const DEFAULT_SETTINGS: AppSettings = {
-  workStart: "08:00",
-  workEnd: "17:00",
-  dailyTarget: 8,
-  theme: "light",
-  groupingThreshold: 10
+  workStart: "08:00", workEnd: "17:00", dailyTarget: 8, theme: "light", groupingThreshold: 10
 };
 
 export async function loadSettings(db: Database): Promise<AppSettings> {
   const rows = await db.select<{key: string, value: string}[]>("SELECT * FROM settings");
   const settings: any = { ...DEFAULT_SETTINGS };
-  
   rows.forEach(row => {
     if (row.key === 'workStart') settings.workStart = row.value;
     if (row.key === 'workEnd') settings.workEnd = row.value;
@@ -72,13 +88,7 @@ export async function loadSettings(db: Database): Promise<AppSettings> {
     if (row.key === 'theme') settings.theme = row.value;
     if (row.key === 'groupingThreshold') settings.groupingThreshold = parseInt(row.value);
     if (row.key === 'adminPassword') settings.adminPassword = row.value;
-    if (row.key === 'weekSchedule') {
-        try {
-            settings.weekSchedule = JSON.parse(row.value);
-        } catch (e) {
-            console.error("Fehler beim Laden des Wochenplans:", e);
-        }
-    }
+    if (row.key === 'weekSchedule') { try { settings.weekSchedule = JSON.parse(row.value); } catch (e) {} }
   });
   return settings;
 }
@@ -93,19 +103,12 @@ export async function saveSettings(db: Database, settings: AppSettings) {
     await saveSetting(db, 'dailyTarget', (settings.dailyTarget || 8).toString());
     await saveSetting(db, 'groupingThreshold', (settings.groupingThreshold || 10).toString());
     if (settings.adminPassword !== undefined) await saveSetting(db, 'adminPassword', settings.adminPassword);
-    
-    if (settings.weekSchedule) {
-        await saveSetting(db, 'weekSchedule', JSON.stringify(settings.weekSchedule));
-    }
+    if (settings.weekSchedule) await saveSetting(db, 'weekSchedule', JSON.stringify(settings.weekSchedule));
 }
 
 // --- DATA MANAGEMENT ---
 export async function resetDatabase(db: Database) {
-  await db.execute("DELETE FROM logs");
-  await db.execute("DELETE FROM work_sessions");
-  await db.execute("DELETE FROM projects");
-  await db.execute("DELETE FROM app_colors");
-  await db.execute("DELETE FROM settings");
+  await db.execute("DELETE FROM logs"); await db.execute("DELETE FROM work_sessions"); await db.execute("DELETE FROM projects"); await db.execute("DELETE FROM app_colors"); await db.execute("DELETE FROM settings");
 }
 
 export async function getKnownApps(db: Database): Promise<{name: string, color: string, icon?: string}[]> {
@@ -113,7 +116,8 @@ export async function getKnownApps(db: Database): Promise<{name: string, color: 
     const uniqueNames = new Set<string>();
     
     logs.forEach(l => {
-        uniqueNames.add(simplifyAppName(l.title || l.exe_path));
+        // Hier nutzen wir auch die neue Logik für die Settings-Liste
+        uniqueNames.add(getAppNameFromPath(l.exe_path, l.title));
     });
 
     const result = [];
@@ -126,32 +130,18 @@ export async function getKnownApps(db: Database): Promise<{name: string, color: 
     return result.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// FIX: Diese Funktion heißt jetzt saveAppConfig und speichert auch Icons
 export async function saveAppConfig(db: Database, appName: string, color: string, icon?: string) {
     const existing = await db.select<any[]>("SELECT * FROM app_colors WHERE name = $1", [appName]);
-    let newColor = color;
-    let newIcon = icon;
-
-    if (existing.length > 0) {
-        if (!newColor) newColor = existing[0].color;
-        if (newIcon === undefined) newIcon = existing[0].icon; 
-    }
-
+    let newColor = color; let newIcon = icon;
+    if (existing.length > 0) { if (!newColor) newColor = existing[0].color; if (newIcon === undefined) newIcon = existing[0].icon; }
     await db.execute("INSERT OR REPLACE INTO app_colors (name, color, icon) VALUES ($1, $2, $3)", [appName, newColor, newIcon]);
 }
 
 // --- PROJECTS ---
 export async function loadProjects(db: Database): Promise<Project[]> {
   const rows = await db.select<any[]>("SELECT * FROM projects");
-  return rows.map(row => ({
-      id: row.id,
-      name: row.name,
-      color: row.color,
-      icon: row.icon,
-      iconType: row.icon_type as 'app' | 'image'
-  }));
+  return rows.map(row => ({ id: row.id, name: row.name, color: row.color, icon: row.icon, iconType: row.icon_type as 'app' | 'image' }));
 }
-
 export async function addProject(db: Database, name: string, color: string, icon?: string, iconType?: string) {
   await db.execute("INSERT INTO projects (name, color, icon, icon_type) VALUES ($1, $2, $3, $4)", [name, color, icon || null, iconType || 'app']);
 }
@@ -159,8 +149,7 @@ export async function updateProject(db: Database, id: number, name: string, colo
   await db.execute("UPDATE projects SET name = $1, color = $2, icon = $3, icon_type = $4 WHERE id = $5", [name, color, icon || null, iconType || 'app', id]);
 }
 export async function deleteProject(db: Database, id: number) {
-  await db.execute("DELETE FROM projects WHERE id = $1", [id]);
-  await db.execute("UPDATE work_sessions SET project_id = NULL WHERE project_id = $1", [id]);
+  await db.execute("DELETE FROM projects WHERE id = $1", [id]); await db.execute("UPDATE work_sessions SET project_id = NULL WHERE project_id = $1", [id]);
 }
 
 // --- LOGGING & SESSIONS ---
@@ -169,33 +158,21 @@ export async function logActiveWindow(db: Database, title: string, path: string)
 }
 
 export async function saveSession(db: Database, start: Date, end: Date, projectId: string, desc: string, existingId?: number) {
-  const startIso = start.toISOString();
-  const endIso = end.toISOString();
-  const pId = projectId ? parseInt(projectId) : null;
-
+  const startIso = start.toISOString(); const endIso = end.toISOString(); const pId = projectId ? parseInt(projectId) : null;
   if (existingId) await db.execute("DELETE FROM work_sessions WHERE id = $1", [existingId]);
-
   const conflicts = await db.select<WorkSession[]>("SELECT * FROM work_sessions WHERE start_time < $1 AND end_time > $2", [endIso, startIso]);
   for (const c of conflicts) {
-    const cStart = new Date(c.start_time);
-    const cEnd = new Date(c.end_time);
-    if (cStart >= start && cEnd <= end) {
-      await db.execute("DELETE FROM work_sessions WHERE id = $1", [c.id]);
-    } else if (cStart < start && cEnd > end) {
-      await db.execute("UPDATE work_sessions SET end_time = $1 WHERE id = $2", [startIso, c.id]);
-      await db.execute("INSERT INTO work_sessions (project_id, description, start_time, end_time) VALUES ($1, $2, $3, $4)", [c.project_id, c.description, endIso, cEnd.toISOString()]);
-    } else if (cStart < start && cEnd > start) {
-      await db.execute("UPDATE work_sessions SET end_time = $1 WHERE id = $2", [startIso, c.id]);
-    } else if (cStart < end && cEnd > end) {
-      await db.execute("UPDATE work_sessions SET start_time = $1 WHERE id = $2", [endIso, c.id]);
-    }
+    const cStart = new Date(c.start_time); const cEnd = new Date(c.end_time);
+    if (cStart >= start && cEnd <= end) { await db.execute("DELETE FROM work_sessions WHERE id = $1", [c.id]); }
+    else if (cStart < start && cEnd > end) { await db.execute("UPDATE work_sessions SET end_time = $1 WHERE id = $2", [startIso, c.id]); await db.execute("INSERT INTO work_sessions (project_id, description, start_time, end_time) VALUES ($1, $2, $3, $4)", [c.project_id, c.description, endIso, cEnd.toISOString()]); }
+    else if (cStart < start && cEnd > start) { await db.execute("UPDATE work_sessions SET end_time = $1 WHERE id = $2", [startIso, c.id]); }
+    else if (cStart < end && cEnd > end) { await db.execute("UPDATE work_sessions SET start_time = $1 WHERE id = $2", [endIso, c.id]); }
   }
   await db.execute("INSERT INTO work_sessions (project_id, description, start_time, end_time) VALUES ($1, $2, $3, $4)", [pId, desc, startIso, endIso]);
 }
 
 export async function deleteSession(db: Database, id: string) {
-  const realId = id.replace('manual-', '');
-  await db.execute("DELETE FROM work_sessions WHERE id = $1", [realId]);
+  const realId = id.replace('manual-', ''); await db.execute("DELETE FROM work_sessions WHERE id = $1", [realId]);
 }
 
 // --- LOAD ALL EVENTS ---
@@ -214,10 +191,13 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
     return config;
   }
 
+  const FIXED_VISUAL_DURATION_MS = 15 * 60 * 1000; 
+
   const logs = await db.select<LogEntry[]>("SELECT * FROM logs ORDER BY created_at ASC LIMIT 15000");
   if (logs.length > 0) {
+    // Initialisierung mit der neuen Logik
     let currentGroup = {
-      appName: simplifyAppName(logs[0].title || logs[0].exe_path),
+      appName: getAppNameFromPath(logs[0].exe_path, logs[0].title),
       exePath: logs[0].exe_path,
       start: new Date(logs[0].created_at.replace(" ", "T") + "Z"),
       end: new Date(logs[0].created_at.replace(" ", "T") + "Z"),
@@ -231,9 +211,12 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
       const log = logs[i];
       const logTime = new Date(log.created_at.replace(" ", "T") + "Z");
       logTime.setSeconds(0, 0);
-      const appName = simplifyAppName(log.title || log.exe_path);
+      
+      // WICHTIG: Hier nutzen wir jetzt den Pfad zur Identifikation!
+      const appName = getAppNameFromPath(log.exe_path, log.title);
       const gapInMinutes = (logTime.getTime() - currentGroup.end.getTime()) / 60000;
       
+      // Aggregation: Gleiche App (basierend auf EXE) UND Lücke kleiner als Threshold
       if (appName === currentGroup.appName && gapInMinutes <= groupingThresholdMinutes) {
         currentGroup.end = new Date(logTime.getTime() + 60000);
         const lastSub = currentGroup.subEvents[currentGroup.subEvents.length - 1];
@@ -243,11 +226,13 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
       } else {
         const config = await getAppConfig(currentGroup.appName);
         if (currentGroup.end > currentGroup.start) {
+            const visualEnd = new Date(currentGroup.start.getTime() + FIXED_VISUAL_DURATION_MS);
+
             allEvents.push({
               id: 'auto-group-' + i,
               title: currentGroup.appName,
               start: currentGroup.start,
-              end: currentGroup.end,
+              end: visualEnd,
               display: 'block',
               backgroundColor: config.color,
               extendedProps: {
@@ -258,7 +243,9 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
                 appColor: config.color,
                 appIcon: config.icon,
                 subEvents: currentGroup.subEvents,
-                isEditMode: editMode
+                isEditMode: editMode,
+                realStart: currentGroup.start,
+                realEnd: currentGroup.end
               }
             });
         }
@@ -272,11 +259,12 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
       }
     }
     const config = await getAppConfig(currentGroup.appName);
+    const visualEnd = new Date(currentGroup.start.getTime() + FIXED_VISUAL_DURATION_MS);
     allEvents.push({
         id: 'auto-group-last',
         title: currentGroup.appName,
         start: currentGroup.start,
-        end: currentGroup.end,
+        end: visualEnd,
         display: 'block',
         backgroundColor: config.color,
         extendedProps: {
@@ -287,7 +275,9 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
           appColor: config.color,
           appIcon: config.icon,
           subEvents: currentGroup.subEvents,
-          isEditMode: editMode
+          isEditMode: editMode,
+          realStart: currentGroup.start,
+          realEnd: currentGroup.end
         }
     });
   }
