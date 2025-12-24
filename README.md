@@ -7,7 +7,7 @@ Ein flexibles Zeitmanagement-System zur Verwaltung individueller Arbeitszeiten p
 
 ## 📥 Aktuelle Version & Download
 
-**[ClockworkHero Installer herunterladen](file:///C:/Gitlab/ClockworkHero/ClockworkHero/src-tauri/target/release/bundle/msi/clockworkhero_0.9.4.1_x64_en-US.msi)**  
+**[ClockworkHero Installer herunterladen](file:///C:/Gitlab/ClockworkHero/ClockworkHero/src-tauri/target/release/bundle/msi/clockworkhero_0.9.5_x64_en-US.msi)**  
 *(Hinweis: Kompiliert für Windows x64)*
 
 ---
