@@ -65,7 +65,6 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
 
     // --- LAYER 2: ACTIVITY STREAM (Auto) ---
     const slotRank = props.slotRank || 0;
-    const sCount = props.slotCount || 1;
 
     // Gemeinsame Icon-Größen
     const iconSizeFull = 34;
@@ -175,7 +174,7 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
                 borderRadius: '6px',
                 padding: '2px',
                 boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.08)',
-                boxSizing: 'box-border'
+                boxSizing: 'border-box'
             }}>
                 {props.appIcon ? (
                     <img src={props.appIcon} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
