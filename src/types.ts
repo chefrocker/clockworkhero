@@ -28,24 +28,24 @@ export interface WorkSession {
 
 // NEU: Zeitblock für Arbeitszeiten
 export interface WorkTimeBlock {
-  id: string;
-  start: string;  // z.B. "08:00"
-  end: string;    // z.B. "12:00"
+    id: string;
+    start: string;  // z.B. "08:00"
+    end: string;    // z.B. "12:00"
 }
 
 // NEU: Arbeitszeiten pro Wochentag
 export interface DaySchedule {
-  dayName: string;        // "Montag", "Dienstag", etc.
-  dayShort: string;       // "Mo", "Di", etc.
-  isWorkday: boolean;     // Ist ein Arbeitstag?
-  blocks: WorkTimeBlock[];
-  totalHours: number;     // Wird berechnet
+    dayName: string;        // "Montag", "Dienstag", etc.
+    dayShort: string;       // "Mo", "Di", etc.
+    isWorkday: boolean;     // Ist ein Arbeitstag?
+    blocks: WorkTimeBlock[];
+    totalHours: number;     // Wird berechnet
 }
 
 export interface AppSettings {
     workStart: string; // Legacy (wird noch für Fallback genutzt)
     workEnd: string;   // Legacy
-    
+
     // NEU: Der komplexe Wochenplan
     weekSchedule?: DaySchedule[];
 
@@ -53,9 +53,11 @@ export interface AppSettings {
     theme: string;
     groupingThreshold: number;
     adminPassword?: string;
-    
+
     darkMode?: boolean;
     hiddenDays?: number[];
+    autoGrouping?: boolean;
+    autostart?: boolean;
 }
 
 export interface ActivitySubEvent {

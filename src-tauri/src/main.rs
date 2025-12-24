@@ -134,13 +134,21 @@ fn main() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
         .invoke_handler(tauri::generate_handler![get_exe_icon])
         .setup(|app| {
             let handle = app.handle();
             let main_window = app.get_webview_window("main").unwrap();
 
-            // FIX: App im Vollbild starten
-            let _ = main_window.maximize();
+            // Falls mit --minimized gestartet (Standard bei Autostart), Fenster verstecken
+            let args: Vec<String> = std::env::args().collect();
+            if args.contains(&"--minimized".to_string()) {
+                let _ = main_window.hide();
+            } else {
+                let _ = main_window.maximize();
+                let _ = main_window.show();
+                let _ = main_window.set_focus();
+            }
 
             // --- SYSTEM TRAY SETUP (Tauri v2) ---
             let show_i = MenuItem::with_id(handle, "show", "Öffnen", true, None::<&str>)?;

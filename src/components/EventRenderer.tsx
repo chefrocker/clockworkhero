@@ -3,139 +3,185 @@ import { FaTrash } from 'react-icons/fa';
 import { AppIcon } from './AppIcon';
 import { hexToRgba } from '../utils/imageUtils';
 
-export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string) => void) => {
-  const props = eventInfo.event.extendedProps;
-  const isInputMode = props.isEditMode; 
-  const isCollapsed = props.isCollapsed;
+export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string) => void, viewMode: 'day' | 'week') => {
+    const props = eventInfo.event.extendedProps;
+    const isInputMode = props.isEditMode;
+    const isCollapsed = props.isCollapsed;
 
-  // --- LAYER 1: SESSIONS (Manuell) ---
-  if (props.type === 'manual') {
-    const baseColor = props.projectColor || '#3498db';
-    const gradient = `linear-gradient(135deg, ${hexToRgba(baseColor, 0.95)} 0%, ${hexToRgba(baseColor, 0.8)} 100%)`;
-    
-    return (
-      <div className="manual-session-block" style={{ 
-          background: gradient,
-          borderTop: '1px solid rgba(255,255,255,0.2)',
-          borderRight: '1px solid rgba(255,255,255,0.2)',
-          borderBottom: '1px solid rgba(255,255,255,0.2)',
-          borderLeft: 'none', 
-          zIndex: 50, position: 'relative'
-      }}>
-        <div style={{
-            position: 'absolute', right: '5px', bottom: '5px', 
-            opacity: 0.2, transform: 'rotate(-10deg)',
-            width: '50px', height: '50px', pointerEvents: 'none',
-            display: 'flex', justifyContent: 'center', alignItems: 'center',
-            filter: 'grayscale(100%) brightness(200%)'
-        }}>
-            {props.projectIconType === 'image' ? (
-                <img src={props.projectIcon} alt="" style={{width: '100%', height: '100%', objectFit: 'contain'}} />
-            ) : (
-                <AppIcon appName={props.projectIcon || props.projectName} fallbackColor="white" className="watermark-icon" />
-            )}
-        </div>
+    // --- LAYER 1: SESSIONS (Manuell) ---
+    if (props.type === 'manual') {
+        const baseColor = props.projectColor || '#3498db';
+        const gradient = `linear-gradient(135deg, ${hexToRgba(baseColor, 0.95)} 0%, ${hexToRgba(baseColor, 0.8)} 100%)`;
 
-        <div style={{position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%'}}>
-            <span style={{fontWeight: '700', fontSize: '0.9rem', textShadow: '0 1px 2px rgba(0,0,0,0.2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
-                {props.projectName}
-            </span>
-            <div 
-                style={{
-                    background: 'rgba(255,255,255,0.2)', color: 'white', 
-                    width: '24px', height: '24px', borderRadius: '4px', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: '5px'
-                }}
-                onClick={(e) => { e.stopPropagation(); onDeleteSession(eventInfo.event.id); }}
-            >
-                <FaTrash size={12} />
+        return (
+            <div className="manual-session-block" style={{
+                background: gradient,
+                borderTop: '1px solid rgba(255,255,255,0.2)',
+                borderRight: '1px solid rgba(255,255,255,0.2)',
+                borderBottom: '1px solid rgba(255,255,255,0.2)',
+                borderLeft: 'none',
+                zIndex: 50, position: 'relative'
+            }}>
+                <div style={{
+                    position: 'absolute', right: '5px', bottom: '5px',
+                    opacity: 0.2, transform: 'rotate(-10deg)',
+                    width: '50px', height: '50px', pointerEvents: 'none',
+                    display: 'flex', justifyContent: 'center', alignItems: 'center',
+                    filter: 'grayscale(100%) brightness(200%)'
+                }}>
+                    {props.projectIconType === 'image' ? (
+                        <img src={props.projectIcon} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    ) : (
+                        <AppIcon appName={props.projectIcon || props.projectName} fallbackColor="white" className="watermark-icon" />
+                    )}
+                </div>
+
+                <div style={{ position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <span style={{ fontWeight: '700', fontSize: '0.9rem', textShadow: '0 1px 2px rgba(0,0,0,0.2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {props.projectName}
+                    </span>
+                    <div
+                        style={{
+                            background: 'rgba(255,255,255,0.2)', color: 'white',
+                            width: '24px', height: '24px', borderRadius: '4px', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: '5px'
+                        }}
+                        onClick={(e) => { e.stopPropagation(); onDeleteSession(eventInfo.event.id); }}
+                    >
+                        <FaTrash size={12} />
+                    </div>
+                </div>
+
+                <div style={{
+                    color: 'rgba(255,255,255,0.9)', fontSize: '0.8rem', fontWeight: '500',
+                    position: 'relative', zIndex: 2, marginTop: '4px',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                }}>
+                    {props.description}
+                </div>
             </div>
-        </div>
-        
-        <div style={{
-            color: 'rgba(255,255,255,0.9)', fontSize: '0.8rem', fontWeight: '500',
-            position: 'relative', zIndex: 2, marginTop: '4px',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-        }}>
-          {props.description}
-        </div>
-      </div>
-    );
-  }
+        );
+    }
 
-  // --- LAYER 2: ACTIVITY STREAM (Auto) ---
-  
-  // FALL A: EINGEKLAPPT (InputMode ODER Kollision)
-  if (isInputMode || isCollapsed) {
-      return (
-        // WICHTIG: Absolute Positionierung für den rechten Rand
-        <div style={{
-            position: 'absolute',
-            top: 0, bottom: 0, right: 0,
-            width: '30px', // Feste Breite für den Icon-Bereich
-            display: 'flex', justifyContent: 'center', alignItems: 'center',
-            pointerEvents: 'none',
-            zIndex: 1
-        }}>
+    // --- LAYER 2: ACTIVITY STREAM (Auto) ---
+    const slotRank = props.slotRank || 0;
+
+    // Gemeinsame Icon-Größen
+    const iconSizeFull = 34;
+    const iconSizeSmall = 24;
+
+    // FALL A: NUR SYMBOLE (Wochenansicht, InputMode, oder Kollision)
+    if (isInputMode || isCollapsed || viewMode === 'week') {
+        const iconSize = (viewMode === 'week') ? iconSizeSmall : (isInputMode ? iconSizeSmall : iconSizeFull);
+        const gap = 6;
+
+        // Raster-Logik: Wie viele Icons passen nebeneinander?
+        // In der Wochenansicht (sehr schmal) nur 2, sonst 4-5.
+        const maxCols = (viewMode === 'week') ? 2 : 4;
+        const col = slotRank % maxCols;
+        const row = Math.floor(slotRank / maxCols);
+
+        // Rechts-Reserve: 12% vom Rand Platz lassen für manuelle Klicks
+        const horizontalOffset = col * (iconSize + gap);
+        const verticalOffset = row * (iconSize + 4);
+
+        return (
             <div style={{
-                width: '24px', height: '24px', 
-                opacity: isCollapsed ? 0.4 : 0.8, 
-                filter: 'grayscale(20%)',
-                background: 'rgba(255,255,255,0.8)', // Hintergrund damit es sich abhebt
-                borderRadius: '4px',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                display: 'flex', justifyContent: 'center', alignItems: 'center'
+                position: 'absolute',
+                top: `${verticalOffset}px`,
+                right: `calc(12% + ${horizontalOffset}px)`, // 12% Reserve + Versatz
+                width: `${iconSize}px`,
+                height: `${iconSize}px`,
+                display: 'flex', justifyContent: 'center', alignItems: 'center',
+                pointerEvents: 'auto',
+                zIndex: 10 + slotRank,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+            }}>
+                <div style={{
+                    width: `${iconSize}px`, height: `${iconSize}px`,
+                    opacity: isCollapsed ? 0.5 : 1,
+                    background: isCollapsed ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.95)',
+                    borderRadius: '5px',
+                    boxShadow: isCollapsed ? 'none' : '0 2px 4px rgba(0,0,0,0.12)',
+                    display: 'flex', justifyContent: 'center', alignItems: 'center',
+                    padding: '2px',
+                    boxSizing: 'border-box',
+                    border: '1px solid rgba(0,0,0,0.08)',
+                }}
+                    className="hover-scale"
+                >
+                    {props.appIcon ? (
+                        <img src={props.appIcon} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+                    ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <AppIcon path={props.exePath} appName={props.simpleName} fallbackColor={props.appColor} />
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    // FALL B: ACTIVITY CARDS (Nur Tagesansicht ohne InputMode)
+    // Volle Karten mit Text, rechtsbündig angeordnet.
+    const cardWidth = 220;
+    const cardGap = 10;
+    const rightMargin = 10;
+    const horizontalOffset = rightMargin + (slotRank * (cardWidth + cardGap));
+
+    const containerStyle: React.CSSProperties = {
+        backgroundColor: 'rgba(255, 255, 255, 0.98)',
+        borderRight: `5px solid ${props.appColor}`,
+        borderLeft: 'none',
+        height: '100%',
+        width: `${cardWidth}px`,
+        position: 'absolute',
+        right: `${horizontalOffset}px`,
+        display: 'flex',
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        padding: '0 8px',
+        boxShadow: '-2px 2px 6px rgba(0,0,0,0.08)',
+        borderRadius: '6px 0 0 6px',
+        overflow: 'hidden',
+        cursor: 'pointer',
+        zIndex: 5 + slotRank,
+        boxSizing: 'border-box',
+        pointerEvents: 'auto'
+    };
+
+    return (
+        <div className="auto-event-container" style={containerStyle}>
+            <div style={{
+                width: `${iconSizeFull}px`, height: `${iconSizeFull}px`, flexShrink: 0, marginLeft: '8px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'rgba(241, 245, 249, 0.9)',
+                borderRadius: '6px',
+                padding: '2px',
+                boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.08)',
+                boxSizing: 'border-box'
             }}>
                 {props.appIcon ? (
-                    <img src={props.appIcon} alt="" style={{width: '18px', height: '18px', objectFit: 'contain'}} />
+                    <img src={props.appIcon} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
                 ) : (
-                    <AppIcon path={props.exePath} appName={props.simpleName} fallbackColor={props.appColor} />
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <AppIcon path={props.exePath} appName={props.simpleName} fallbackColor={props.appColor} />
+                    </div>
                 )}
             </div>
+            <div style={{
+                flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden',
+                textAlign: 'right'
+            }}>
+                <div style={{
+                    fontSize: '0.85rem', fontWeight: '700', color: '#0f172a',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    lineHeight: '1.2'
+                }}>
+                    {props.simpleName}
+                </div>
+            </div>
         </div>
-      );
-  }
-
-  // FALL B: ACTIVITY CARDS (Volle Breite)
-  const containerStyle: React.CSSProperties = {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderLeft: `5px solid ${props.appColor}`,
-    height: '100%', 
-    width: '80%', 
-    marginLeft: 'auto', 
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: '0 8px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-    borderRadius: '4px',
-    overflow: 'hidden',
-    cursor: 'pointer',
-    zIndex: 5
-  };
-
-  return (
-    <div className="auto-event-container" style={containerStyle}>
-      <div style={{
-          width: '24px', height: '24px', flexShrink: 0, marginRight: '10px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center'
-      }}>
-        {props.appIcon ? (
-            <img src={props.appIcon} alt="" style={{width: '100%', height: '100%', objectFit: 'contain'}} />
-        ) : (
-            <AppIcon path={props.exePath} appName={props.simpleName} fallbackColor={props.appColor} />
-        )}
-      </div>
-      <div style={{
-          flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden'
-      }}>
-          <div style={{
-              fontSize: '0.85rem', fontWeight: '700', color: '#334155',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-          }}>
-              {props.simpleName}
-          </div>
-      </div>
-    </div>
-  );
+    );
 };

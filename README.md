@@ -5,6 +5,13 @@ Ein flexibles Zeitmanagement-System zur Verwaltung individueller Arbeitszeiten p
 
 ---
 
+## 📥 Aktuelle Version & Download
+
+**[ClockworkHero Installer herunterladen](file:///C:/Gitlab/ClockworkHero/ClockworkHero/src-tauri/target/release/bundle/msi/clockworkhero_0.9.4.1_x64_en-US.msi)**  
+*(Hinweis: Kompiliert für Windows x64)*
+
+---
+
 ## 📋 Übersicht
 
 Dieses Feature ermöglicht es Benutzern, ihre Arbeitszeiten für jeden Wochentag individuell zu konfigurieren. Pro Tag können beliebig viele Zeitblöcke hinzugefügt werden, um komplexe Arbeitszeitmodelle abzubilden (z.B. geteilte Dienste mit Mittagspausen).
@@ -302,11 +309,11 @@ Die Komponente passt sich automatisch an verschiedene Bildschirmgrößen an:
 - [x] `DayCard` Sub-Komponente implementieren
 - [x] Helper-Funktion `calculateDayHours` entwickeln
 
-### Phase 2: Integration 🔄
-- [ ] SettingsModal anpassen (General Tab)
-- [ ] Default-Wochenplan-Generator implementieren
-- [ ] CSS-Styles in `App.css` hinzufügen
-- [ ] Testen der Benutzerinteraktionen
+### Phase 2: Integration ✅
+- [x] SettingsModal anpassen (General Tab)
+- [x] Default-Wochenplan-Generator implementieren
+- [x] CSS-Styles in `App.css` hinzufügen
+- [x] Testen der Benutzerinteraktionen
 
 ### Phase 3: Persistenz 📝
 - [ ] Datenbank-Service erweitern (`db.ts`)
@@ -314,9 +321,9 @@ Die Komponente passt sich automatisch an verschiedene Bildschirmgrößen an:
 - [ ] Migration von alten `workStart/workEnd` Werten
 - [ ] Datenbank-Schema aktualisieren
 
-### Phase 4: Refactoring 🔧
-- [ ] Settings-Tabs in separate Dateien auslagern
-- [ ] Gemeinsame Types/Utils extrahieren
+### Phase 4: Refactoring ✅
+- [x] Settings-Tabs in separate Dateien auslagern (`GeneralTab.tsx`, `ProjectsTab.tsx`, etc.)
+- [x] Gemeinsame Types/Utils extrahieren
 - [ ] Unit Tests schreiben
 - [ ] Integration Tests durchführen
 

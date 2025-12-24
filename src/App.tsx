@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import Database from '@tauri-apps/plugin-sql';
-import { FaPen, FaSave, FaCalendarDay, FaCalendarWeek, FaCog, FaChartPie, FaPlay, FaStop } from 'react-icons/fa';
+import { FaPen, FaCalendarDay, FaCalendarWeek, FaCog, FaChartPie, FaPlay, FaStop } from 'react-icons/fa';
+import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart';
 
-import { 
-    initDatabase, logActiveWindow, loadAllEvents, loadProjects, 
-    addProject, deleteProject, saveSession, deleteSession,
-    loadSettings, saveSettings, AppSettings,
-    resetDatabase, updateProject
+import {
+  initDatabase, logActiveWindow, loadAllEvents, loadProjects,
+  addProject, deleteProject, saveSession, deleteSession,
+  loadSettings, saveSettings, AppSettings,
+  resetDatabase, updateProject
 } from './services/db';
 
 import { CalendarEngine } from './components/CalendarEngine';
@@ -21,45 +22,45 @@ import './App.css';
 interface WindowInfo { title: string; path: string; }
 
 interface TimerState {
-    isRunning: boolean;
-    startTime: number | null;
-    projectId: string;
-    description: string;
+  isRunning: boolean;
+  startTime: number | null;
+  projectId: string;
+  description: string;
 }
 
 function App() {
   const [db, setDb] = useState<Database | null>(null);
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  
+
   // isEditMode = true -> "Eingabemodus" (Icons rechts, Platz für neue Einträge)
   // isEditMode = false -> "ActivityCards Modus" (Breite Karten zur Ansicht)
   const [isEditMode, setIsEditMode] = useState(false);
-  
+
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'dashboard'>('week');
-  const [settings, setSettings] = useState<AppSettings>({ 
-      workStart: "08:00", 
-      workEnd: "17:00", 
-      theme: "light", 
-      groupingThreshold: 10, 
-      dailyTarget: 8 
+  const [settings, setSettings] = useState<AppSettings>({
+    workStart: "08:00",
+    workEnd: "17:00",
+    theme: "light",
+    groupingThreshold: 10,
+    dailyTarget: 8
   });
-  
+
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  
+
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
-  const [selection, setSelection] = useState<{start: Date, end: Date} | null>(null);
+  const [selection, setSelection] = useState<{ start: Date, end: Date } | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<number | undefined>(undefined);
 
   // Timer State
   const [timerState, setTimerState] = useState<TimerState>({
-      isRunning: false, startTime: null, projectId: "", description: ""
+    isRunning: false, startTime: null, projectId: "", description: ""
   });
   const [timerDisplay, setTimerDisplay] = useState("00:00:00");
   const lastSavedTitle = useRef<string>("");
-  
+
   // ScrollTime State (Startet bei aktueller Stunde)
   const [initialScrollTime, setInitialScrollTime] = useState("08:00:00");
 
@@ -70,17 +71,17 @@ function App() {
         setDb(database);
         const loadedSettings = await loadSettings(database);
         setSettings(loadedSettings);
-        
+
         if (loadedSettings.darkMode) {
-            document.body.classList.add('dark-mode');
+          document.body.classList.add('dark-mode');
         } else {
-            document.body.classList.remove('dark-mode');
+          document.body.classList.remove('dark-mode');
         }
 
         // Timer State laden
         const savedTimer = localStorage.getItem('clockwork_timer');
         if (savedTimer) {
-            setTimerState(JSON.parse(savedTimer));
+          setTimerState(JSON.parse(savedTimer));
         }
 
         // Aktuelle Zeit für ScrollTime setzen
@@ -88,7 +89,7 @@ function App() {
         const currentHour = now.getHours().toString().padStart(2, '0');
         setInitialScrollTime(`${currentHour}:00:00`);
 
-        refreshData(database, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, loadedSettings.groupingThreshold);
+        refreshData(database, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, loadedSettings);
       } catch (e) { console.error("DB Init Error:", e); }
     }
     start();
@@ -96,17 +97,17 @@ function App() {
 
   // Timer Interval
   useEffect(() => {
-      let interval: any;
-      if (timerState.isRunning && timerState.startTime) {
-          interval = setInterval(() => {
-              const now = Date.now();
-              const diff = now - timerState.startTime!;
-              const date = new Date(diff);
-              const str = date.toISOString().substr(11, 8);
-              setTimerDisplay(str);
-          }, 1000);
-      } else { setTimerDisplay("00:00:00"); }
-      return () => clearInterval(interval);
+    let interval: any;
+    if (timerState.isRunning && timerState.startTime) {
+      interval = setInterval(() => {
+        const now = Date.now();
+        const diff = now - timerState.startTime!;
+        const date = new Date(diff);
+        const str = date.toISOString().substr(11, 8);
+        setTimerDisplay(str);
+      }, 1000);
+    } else { setTimerDisplay("00:00:00"); }
+    return () => clearInterval(interval);
   }, [timerState]);
 
   // Active Window Listener
@@ -115,11 +116,11 @@ function App() {
       const info = event.payload as WindowInfo;
       const title = info.title || "Unbekannt";
       const path = info.path || "";
-      
+
       if (db && title !== lastSavedTitle.current && title !== "Unbekannt") {
         try {
-            await logActiveWindow(db, title, path);
-            lastSavedTitle.current = title;
+          await logActiveWindow(db, title, path);
+          lastSavedTitle.current = title;
         } catch (e) { console.error("Fehler beim Speichern:", e); }
       }
     });
@@ -127,14 +128,21 @@ function App() {
   }, [db]);
 
   // Refresh bei Modus-Wechsel
-  useEffect(() => { 
-      if (db && viewMode !== 'dashboard') {
-          refreshData(db, isEditMode, viewMode, settings.groupingThreshold); 
-      }
-  }, [isEditMode, viewMode, settings.groupingThreshold]);
+  useEffect(() => {
+    if (db && viewMode !== 'dashboard') {
+      refreshData(db, isEditMode, viewMode, settings);
+    }
+  }, [isEditMode, viewMode, settings.groupingThreshold, db, settings]);
 
-  async function refreshData(database: Database, editMode: boolean, currentView: 'day' | 'week', threshold: number) {
-    const finalThreshold = currentView === 'week' ? 60 : threshold;
+  async function refreshData(database: Database, editMode: boolean, currentView: 'day' | 'week', settings: AppSettings) {
+    let finalThreshold = settings.groupingThreshold || 10;
+
+    if (settings.autoGrouping) {
+      // Automatik-Logik: Woche braucht mehr Gruppierung als Tag
+      finalThreshold = currentView === 'week' ? 45 : 10;
+      // Später könnte man hier noch auf die Log-Dichte reagieren
+    }
+
     const events = await loadAllEvents(database, editMode, finalThreshold);
     const projs = await loadProjects(database);
     setCalendarEvents(events);
@@ -150,118 +158,134 @@ function App() {
   const handleEventClick = (info: any) => {
     const props = info.event.extendedProps;
     if (props.type === 'manual' && isEditMode) {
-        setSelection({ start: info.event.start, end: info.event.end });
-        setEditingSessionId(props.dbId);
-        setShowSessionModal(true);
+      setSelection({ start: info.event.start, end: info.event.end });
+      setEditingSessionId(props.dbId);
+      setShowSessionModal(true);
+      return;
     }
-    if (props.type === 'auto' && !isEditMode) {
-        setSelectedActivity({
-            title: props.simpleName,
-            exePath: props.exePath,
-            color: props.appColor,
-            subEvents: props.subEvents || []
-        });
-        setShowActivityModal(true);
+
+    // Auto-Event Details (immer verfügbar, wenn geklickt)
+    if (props.type === 'auto') {
+      setSelectedActivity({
+        title: props.simpleName,
+        exePath: props.exePath,
+        color: props.appColor,
+        subEvents: props.subEvents || []
+      });
+      setShowActivityModal(true);
     }
   };
 
   const handleEventChange = async (info: any) => {
-      const props = info.event.extendedProps;
-      if (db && props.type === 'manual') {
-          await saveSession(db, info.event.start, info.event.end, props.projectId, props.description, props.dbId);
-          refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold);
-      }
+    const props = info.event.extendedProps;
+    if (db && props.type === 'manual') {
+      await saveSession(db, info.event.start, info.event.end, props.projectId, props.description, props.dbId);
+      refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings);
+    }
   };
 
   const handleSaveSession = async (projectId: string, desc: string, start: Date, end: Date) => {
     if (db) {
       await saveSession(db, start, end, projectId, desc, editingSessionId);
       setShowSessionModal(false);
-      refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold);
+      refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings);
     }
   };
 
   const handleDeleteSession = async (id: string) => {
     if (db) {
       await deleteSession(db, id);
-      refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold);
+      refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings);
     }
   };
 
   const handleSaveSettings = async (newSettings: AppSettings) => {
-      if (db) {
-          await saveSettings(db, newSettings);
-          setSettings(newSettings);
-          if (newSettings.darkMode) {
-              document.body.classList.add('dark-mode');
-          } else {
-              document.body.classList.remove('dark-mode');
-          }
-          setShowSettings(false);
+    if (db) {
+      await saveSettings(db, newSettings);
+
+      // Autostart Sync
+      try {
+        const currentlyEnabled = await isEnabled();
+        if (newSettings.autostart && !currentlyEnabled) {
+          await enable();
+        } else if (!newSettings.autostart && currentlyEnabled) {
+          await disable();
+        }
+      } catch (e) {
+        console.error("Autostart Sync Fehler:", e);
       }
+
+      setSettings(newSettings);
+      if (newSettings.darkMode) {
+        document.body.classList.add('dark-mode');
+      } else {
+        document.body.classList.remove('dark-mode');
+      }
+      setShowSettings(false);
+    }
   };
 
   const handleReset = async () => {
-      if (db) {
-          await resetDatabase(db);
-          window.location.reload();
-      }
+    if (db) {
+      await resetDatabase(db);
+      window.location.reload();
+    }
   };
 
   const handleUpdateProject = async (id: number, name: string, color: string, icon?: string, iconType?: 'app' | 'image') => {
-      if (db) {
-          await updateProject(db, id, name, color, icon, iconType);
-          refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold);
-      }
+    if (db) {
+      await updateProject(db, id, name, color, icon, iconType);
+      refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings);
+    }
   };
 
   const handleDeleteProject = async (id: number) => {
-      if (db) {
-          await deleteProject(db, id);
-          refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold);
-      }
+    if (db) {
+      await deleteProject(db, id);
+      refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings);
+    }
   };
 
   const handleAddProject = async (name: string, color: string, icon?: string, iconType?: 'app' | 'image') => {
-      if (db && name) {
-          await addProject(db, name, color, icon, iconType);
-          refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold);
-      }
+    if (db && name) {
+      await addProject(db, name, color, icon, iconType);
+      refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings);
+    }
   };
 
   const startTimer = () => {
-      if (!timerState.projectId) {
-          alert("Bitte wähle zuerst ein Projekt aus.");
-          return;
-      }
-      const newState = {
-          ...timerState,
-          isRunning: true,
-          startTime: Date.now()
-      };
-      setTimerState(newState);
-      localStorage.setItem('clockwork_timer', JSON.stringify(newState));
+    if (!timerState.projectId) {
+      alert("Bitte wähle zuerst ein Projekt aus.");
+      return;
+    }
+    const newState = {
+      ...timerState,
+      isRunning: true,
+      startTime: Date.now()
+    };
+    setTimerState(newState);
+    localStorage.setItem('clockwork_timer', JSON.stringify(newState));
   };
 
   const stopTimer = async () => {
-      if (timerState.isRunning && timerState.startTime && db) {
-          const end = new Date();
-          const start = new Date(timerState.startTime);
-          
-          await saveSession(db, start, end, timerState.projectId, timerState.description);
-          
-          const newState = { isRunning: false, startTime: null, projectId: "", description: "" };
-          setTimerState(newState);
-          localStorage.removeItem('clockwork_timer');
-          
-          refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold);
-      }
+    if (timerState.isRunning && timerState.startTime && db) {
+      const end = new Date();
+      const start = new Date(timerState.startTime);
+
+      await saveSession(db, start, end, timerState.projectId, timerState.description);
+
+      const newState = { isRunning: false, startTime: null, projectId: "", description: "" };
+      setTimerState(newState);
+      localStorage.removeItem('clockwork_timer');
+
+      refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings);
+    }
   };
 
   return (
     <div className="app-container">
-      
-      <SessionModal 
+
+      <SessionModal
         isOpen={showSessionModal}
         onClose={() => setShowSessionModal(false)}
         onSave={handleSaveSession}
@@ -273,7 +297,7 @@ function App() {
         editingSessionId={editingSessionId}
       />
 
-      <ActivityDetailModal 
+      <ActivityDetailModal
         isOpen={showActivityModal}
         onClose={() => setShowActivityModal(false)}
         title={selectedActivity?.title || ''}
@@ -282,7 +306,7 @@ function App() {
         subEvents={selectedActivity?.subEvents || []}
       />
 
-      <SettingsModal 
+      <SettingsModal
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
         settings={settings}
@@ -297,89 +321,89 @@ function App() {
 
       <div className="app-header">
         <div className="header-left">
-            <div className="header-status">
+          <div className="header-status">
             <span className={`status-dot ${isEditMode ? 'active' : ''}`}></span>
             {isEditMode ? 'Modus: Eingabe' : 'Modus: ActivityCards'}
-            </div>
+          </div>
 
-            <div className="timer-controls">
-                {!timerState.isRunning ? (
-                    <>
-                        <select 
-                            className="header-input" 
-                            style={{width: '150px'}}
-                            value={timerState.projectId}
-                            onChange={e => setTimerState({...timerState, projectId: e.target.value})}
-                        >
-                            <option value="">Projekt wählen...</option>
-                            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
-                        <input 
-                            className="header-input" 
-                            style={{width: '200px'}}
-                            placeholder="Was machst du gerade?"
-                            value={timerState.description}
-                            onChange={e => setTimerState({...timerState, description: e.target.value})}
-                        />
-                        <button className="btn-save header-input" style={{padding: '0 16px'}} onClick={startTimer}>
-                            <FaPlay size={10} /> Start
-                        </button>
-                    </>
-                ) : (
-                    <>
-                        <span style={{fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-secondary)'}}>
-                            Läuft: {projects.find(p => p.id.toString() === timerState.projectId)?.name}
-                        </span>
-                        <div className="timer-display">{timerDisplay}</div>
-                        <button className="btn-secondary header-input" style={{padding: '0 16px', borderColor: '#ef4444', color: '#ef4444'}} onClick={stopTimer}>
-                            <FaStop size={10} /> Stop
-                        </button>
-                    </>
-                )}
-            </div>
+          <div className="timer-controls">
+            {!timerState.isRunning ? (
+              <>
+                <select
+                  className="header-input"
+                  style={{ width: '150px' }}
+                  value={timerState.projectId}
+                  onChange={e => setTimerState({ ...timerState, projectId: e.target.value })}
+                >
+                  <option value="">Projekt wählen...</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <input
+                  className="header-input"
+                  style={{ width: '200px' }}
+                  placeholder="Was machst du gerade?"
+                  value={timerState.description}
+                  onChange={e => setTimerState({ ...timerState, description: e.target.value })}
+                />
+                <button className="btn-save header-input" style={{ padding: '0 16px' }} onClick={startTimer}>
+                  <FaPlay size={10} /> Start
+                </button>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                  Läuft: {projects.find(p => p.id.toString() === timerState.projectId)?.name}
+                </span>
+                <div className="timer-display">{timerDisplay}</div>
+                <button className="btn-secondary header-input" style={{ padding: '0 16px', borderColor: '#ef4444', color: '#ef4444' }} onClick={stopTimer}>
+                  <FaStop size={10} /> Stop
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="header-controls">
-          <button onClick={() => setShowSettings(true)} style={{background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '8px'}} title="Einstellungen"><FaCog size={20} /></button>
-          
-          <div style={{display: 'flex', background: 'var(--panel-bg)', borderRadius: '8px', padding: '2px', marginRight: '10px', border: '1px solid var(--border-color)'}}>
-              <button onClick={() => setViewMode('day')} style={{background: viewMode === 'day' ? 'var(--bg-color)' : 'transparent', boxShadow: viewMode === 'day' ? 'var(--shadow)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: 'var(--text-color)'}}><FaCalendarDay /> Tag</button>
-              <button onClick={() => setViewMode('week')} style={{background: viewMode === 'week' ? 'var(--bg-color)' : 'transparent', boxShadow: viewMode === 'week' ? 'var(--shadow)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: 'var(--text-color)'}}><FaCalendarWeek /> Woche</button>
-              <button onClick={() => setViewMode('dashboard')} style={{background: viewMode === 'dashboard' ? 'var(--bg-color)' : 'transparent', boxShadow: viewMode === 'dashboard' ? 'var(--shadow)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: 'var(--text-color)'}}><FaChartPie /> Auswertung</button>
+          <button onClick={() => setShowSettings(true)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '8px' }} title="Einstellungen"><FaCog size={20} /></button>
+
+          <div style={{ display: 'flex', background: 'var(--panel-bg)', borderRadius: '8px', padding: '2px', marginRight: '10px', border: '1px solid var(--border-color)' }}>
+            <button onClick={() => setViewMode('day')} style={{ background: viewMode === 'day' ? 'var(--bg-color)' : 'transparent', boxShadow: viewMode === 'day' ? 'var(--shadow)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: 'var(--text-color)' }}><FaCalendarDay /> Tag</button>
+            <button onClick={() => setViewMode('week')} style={{ background: viewMode === 'week' ? 'var(--bg-color)' : 'transparent', boxShadow: viewMode === 'week' ? 'var(--shadow)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: 'var(--text-color)' }}><FaCalendarWeek /> Woche</button>
+            <button onClick={() => setViewMode('dashboard')} style={{ background: viewMode === 'dashboard' ? 'var(--bg-color)' : 'transparent', boxShadow: viewMode === 'dashboard' ? 'var(--shadow)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: 'var(--text-color)' }}><FaChartPie /> Auswertung</button>
           </div>
 
-          <button 
-            className={`btn-toggle ${isEditMode ? 'active' : ''}`} 
+          <button
+            className={`btn-toggle ${isEditMode ? 'active' : ''}`}
             onClick={() => setIsEditMode(!isEditMode)}
-            style={{minWidth: '180px', justifyContent: 'center'}}
+            style={{ minWidth: '180px', justifyContent: 'center' }}
           >
             {isEditMode ? <FaPen /> : <FaChartPie />}
             {isEditMode ? 'Modus: Eingabe' : 'Modus: ActivityCards'}
           </button>
-          
-          <button className="btn-refresh" onClick={() => db && refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings.groupingThreshold)}>Refresh</button>
+
+          <button className="btn-refresh" onClick={() => db && refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings)}>Refresh</button>
         </div>
       </div>
 
       <div className="calendar-wrapper">
         {viewMode === 'dashboard' ? (
-            <Dashboard db={db} projects={projects} />
+          <Dashboard db={db} projects={projects} />
         ) : (
-            <CalendarEngine 
-              events={calendarEvents}
-              isEditMode={isEditMode}
-              viewMode={viewMode}
-              onDateSelect={handleDateSelect}
-              onEventClick={handleEventClick}
-              onDeleteSession={handleDeleteSession}
-              onEventDrop={handleEventChange}
-              onEventResize={handleEventChange}
-              workStart={settings.workStart}
-              workEnd={settings.workEnd}
-              scrollTime={initialScrollTime}
-              hiddenDays={settings.hiddenDays}
-              weekSchedule={settings.weekSchedule}
-            />
+          <CalendarEngine
+            events={calendarEvents}
+            isEditMode={isEditMode}
+            viewMode={viewMode}
+            onDateSelect={handleDateSelect}
+            onEventClick={handleEventClick}
+            onDeleteSession={handleDeleteSession}
+            onEventDrop={handleEventChange}
+            onEventResize={handleEventChange}
+            workStart={settings.workStart}
+            workEnd={settings.workEnd}
+            scrollTime={initialScrollTime}
+            hiddenDays={settings.hiddenDays}
+            weekSchedule={settings.weekSchedule}
+          />
         )}
       </div>
     </div>
