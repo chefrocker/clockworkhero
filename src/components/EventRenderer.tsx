@@ -65,7 +65,7 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
 
     // --- LAYER 2: ACTIVITY STREAM (Auto) ---
     const slotRank = props.slotRank || 0;
-    const sCount = props.slotCount || 1; // Variablenname geändert um Konflikte zu vermeiden
+    const sCount = props.slotCount || 1;
 
     // Gemeinsame Icon-Größen
     const iconSizeFull = 34;
@@ -76,10 +76,12 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
         const iconSize = (viewMode === 'week') ? iconSizeSmall : (isInputMode ? iconSizeSmall : iconSizeFull);
         const gap = 6;
 
-        const maxCols = (viewMode === 'week') ? 2 : 4;
+        const maxCols = (viewMode === 'week') ? 2 : 5;
         const col = slotRank % maxCols;
         const row = Math.floor(slotRank / maxCols);
 
+        // Rechtsbündig mit minimalem Margin (2%)
+        // Gesamtplatz bis 90% des Tages nutzbar (wird hier durch maxCols begrenzt)
         const horizontalOffset = col * (iconSize + gap);
         const verticalOffset = row * (iconSize + 4);
 
@@ -87,7 +89,7 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
             <div style={{
                 position: 'absolute',
                 top: `${verticalOffset}px`,
-                right: `calc(12% + ${horizontalOffset}px)`,
+                right: `calc(2% + ${horizontalOffset}px)`,
                 width: `${iconSize}px`,
                 height: `${iconSize}px`,
                 display: 'flex', justifyContent: 'center', alignItems: 'center',
@@ -122,37 +124,31 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
     }
 
     // FALL B: ACTIVITY CARDS (Nur Tagesansicht ohne InputMode)
-    const maxDayWidth = 0.9;
-    const defaultCardWidth = 220;
-    const cardGap = 8;
-    const rightMargin = 8;
-    const estimatedColWidth = 900;
-    const usableWidth = estimatedColWidth * maxDayWidth;
+    // - Einheitliche Größe (200px)
+    // - Rechtsbündig angeordnet
+    // - Max 90% Abdeckung (10% links bleibt frei)
 
-    let currentCardWidth = defaultCardWidth;
-    let slotRankInRow = slotRank;
-    let rowIndex = 0;
+    const fixedCardWidth = 200;
+    const cardGap = 10;
+    const rightPadding = 10; // Kleiner Abstand vom rechten Rand
 
-    if (sCount * (defaultCardWidth + cardGap) > usableWidth) {
-        currentCardWidth = Math.max(140, Math.floor(usableWidth / sCount) - cardGap);
-        if (currentCardWidth === 140 && (sCount * (140 + cardGap) > usableWidth)) {
-            const cardsPerRow = Math.floor(usableWidth / (140 + cardGap));
-            slotRankInRow = slotRank % cardsPerRow;
-            rowIndex = Math.floor(slotRank / cardsPerRow);
-        }
-    }
+    // Schätzung: Wie viele Karten passen in 90% der Spalte (ca. 800px nutzbar)?
+    const cardsPerRow = 4;
 
-    const horizontalOffset = rightMargin + (slotRankInRow * (currentCardWidth + cardGap));
-    const verticalOffset = rowIndex * 40;
+    const colIndex = slotRank % cardsPerRow;
+    const rowIndex = Math.floor(slotRank / cardsPerRow);
+
+    const horizontalOffset = rightPadding + (colIndex * (fixedCardWidth + cardGap));
+    const verticalOffset = rowIndex * 34; // Versatz für weitere Reihen
 
     const containerStyle: React.CSSProperties = {
         backgroundColor: 'rgba(255, 255, 255, 0.98)',
         borderRight: `5px solid ${props.appColor}`,
         borderLeft: 'none',
-        height: rowIndex > 0 ? '35px' : '100%',
-        width: `${currentCardWidth}px`,
+        height: rowIndex > 0 ? '30px' : '100%', // Erste Reihe volle Höhe, weitere kompakt
+        width: `${fixedCardWidth}px`,
         position: 'absolute',
-        right: `${horizontalOffset}px`,
+        right: `${horizontalOffset}px`, // Von rechts nach links
         top: rowIndex > 0 ? `${verticalOffset}px` : '0',
         display: 'flex',
         flexDirection: 'row-reverse',
@@ -165,21 +161,21 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
         zIndex: 5 + slotRank,
         boxSizing: 'border-box',
         pointerEvents: 'auto',
-        transition: 'all 0.3s ease'
+        transition: 'all 0.2s ease'
     };
 
     return (
         <div className="auto-event-container" style={containerStyle}>
             <div style={{
-                width: rowIndex > 0 ? '24px' : `${iconSizeFull}px`,
-                height: rowIndex > 0 ? '24px' : `${iconSizeFull}px`,
+                width: rowIndex > 0 ? '22px' : `${iconSizeFull}px`,
+                height: rowIndex > 0 ? '22px' : `${iconSizeFull}px`,
                 flexShrink: 0, marginLeft: '8px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: 'rgba(241, 245, 249, 0.9)',
                 borderRadius: '6px',
                 padding: '2px',
                 boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.08)',
-                boxSizing: 'border-box'
+                boxSizing: 'box-border'
             }}>
                 {props.appIcon ? (
                     <img src={props.appIcon} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
@@ -194,7 +190,7 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
                 textAlign: 'right'
             }}>
                 <div style={{
-                    fontSize: rowIndex > 0 ? '0.75rem' : '0.85rem',
+                    fontSize: rowIndex > 0 ? '0.75rem' : '0.82rem',
                     fontWeight: '700', color: '#0f172a',
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     lineHeight: '1.2'
