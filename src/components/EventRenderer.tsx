@@ -65,7 +65,7 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
 
     // --- LAYER 2: ACTIVITY STREAM (Auto) ---
     const slotRank = props.slotRank || 0;
-    const slotCount = props.slotCount || 1;
+    const sCount = props.slotCount || 1; // Variablenname geändert um Konflikte zu vermeiden
 
     // Gemeinsame Icon-Größen
     const iconSizeFull = 34;
@@ -76,13 +76,10 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
         const iconSize = (viewMode === 'week') ? iconSizeSmall : (isInputMode ? iconSizeSmall : iconSizeFull);
         const gap = 6;
 
-        // Raster-Logik: Wie viele Icons passen nebeneinander?
-        // In der Wochenansicht (sehr schmal) nur 2, sonst 4-5.
         const maxCols = (viewMode === 'week') ? 2 : 4;
         const col = slotRank % maxCols;
         const row = Math.floor(slotRank / maxCols);
 
-        // Rechts-Reserve: 12% vom Rand Platz lassen für manuelle Klicks
         const horizontalOffset = col * (iconSize + gap);
         const verticalOffset = row * (iconSize + 4);
 
@@ -90,7 +87,7 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
             <div style={{
                 position: 'absolute',
                 top: `${verticalOffset}px`,
-                right: `calc(12% + ${horizontalOffset}px)`, // 12% Reserve + Versatz
+                right: `calc(12% + ${horizontalOffset}px)`,
                 width: `${iconSize}px`,
                 height: `${iconSize}px`,
                 display: 'flex', justifyContent: 'center', alignItems: 'center',
@@ -125,33 +122,20 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
     }
 
     // FALL B: ACTIVITY CARDS (Nur Tagesansicht ohne InputMode)
-    // Volle Karten mit Text, rechtsbündig angeordnet.
-
-    // Dynamische Breitenberechnung:
-    // Wir lassen 10% Platz auf der linken Seite (für manuelle Zeitblock-Klicks).
-    // Wenn viele Karten nebeneinander liegen (slotCount > 3), verkleinern wir sie.
-    const maxDayWidth = 0.9; // 90% des Platzes darf genutzt werden
+    const maxDayWidth = 0.9;
     const defaultCardWidth = 220;
     const cardGap = 8;
     const rightMargin = 8;
+    const estimatedColWidth = 900;
+    const usableWidth = estimatedColWidth * maxDayWidth;
 
-    // Wenn mehr als 3 Karten da sind, fangen wir an zu schrumpfen oder zu stapeln
     let currentCardWidth = defaultCardWidth;
     let slotRankInRow = slotRank;
     let rowIndex = 0;
 
-    // Einfache Logik: Wenn die Karten die 90% Marke (ca. 800px) überschreiten würden,
-    // fangen wir eine neue Reihe an oder verkleinern sie.
-    // FullCalendar Spaltenbreite variiert, aber wir nehmen ca. 900px als Referenz für Desktop.
-    const estimatedColWidth = 900;
-    const usableWidth = estimatedColWidth * maxDayWidth;
-
-    if (slotCount * (defaultCardWidth + cardGap) > usableWidth) {
-        // Option 1: Karten schrumpfen (bis min 140px)
-        currentCardWidth = Math.max(140, Math.floor(usableWidth / slotCount) - cardGap);
-
-        // Option 2: Wenn immer noch zu breit, zweite Reihe (bei sehr vielen Slots)
-        if (currentCardWidth === 140 && (slotCount * (140 + cardGap) > usableWidth)) {
+    if (sCount * (defaultCardWidth + cardGap) > usableWidth) {
+        currentCardWidth = Math.max(140, Math.floor(usableWidth / sCount) - cardGap);
+        if (currentCardWidth === 140 && (sCount * (140 + cardGap) > usableWidth)) {
             const cardsPerRow = Math.floor(usableWidth / (140 + cardGap));
             slotRankInRow = slotRank % cardsPerRow;
             rowIndex = Math.floor(slotRank / cardsPerRow);
@@ -159,13 +143,13 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
     }
 
     const horizontalOffset = rightMargin + (slotRankInRow * (currentCardWidth + cardGap));
-    const verticalOffset = rowIndex * 40; // Versatz falls mehrere Reihen (selten)
+    const verticalOffset = rowIndex * 40;
 
     const containerStyle: React.CSSProperties = {
         backgroundColor: 'rgba(255, 255, 255, 0.98)',
         borderRight: `5px solid ${props.appColor}`,
         borderLeft: 'none',
-        height: rowIndex > 0 ? '35px' : '100%', // Kleinere Höhe für untere Reihen
+        height: rowIndex > 0 ? '35px' : '100%',
         width: `${currentCardWidth}px`,
         position: 'absolute',
         right: `${horizontalOffset}px`,
