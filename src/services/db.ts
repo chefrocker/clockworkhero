@@ -29,7 +29,8 @@ const EXE_MAPPING: Record<string, string> = {
   'cmd.exe': 'Terminal',
   'powershell.exe': 'Terminal',
   'pwsh.exe': 'Terminal',
-  'wt.exe': 'Terminal'
+  'wt.exe': 'Terminal',
+  'powershell_ise.exe': 'Terminal'
 };
 
 function getAppNameFromPath(path: string, title: string): string {

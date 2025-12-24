@@ -107,7 +107,8 @@ export async function getDashboardStats(db: Database, filter: DashboardFilter): 
             'excel.exe': 'Excel', 'powerpnt.exe': 'PowerPoint', 'outlook.exe': 'Outlook',
             'onenote.exe': 'OneNote', 'teams.exe': 'Teams', 'spotify.exe': 'Spotify',
             'discord.exe': 'Discord', 'whatsapp.exe': 'WhatsApp', 'slack.exe': 'Slack',
-            'explorer.exe': 'Explorer', 'cmd.exe': 'Terminal', 'powershell.exe': 'Terminal'
+            'explorer.exe': 'Explorer', 'cmd.exe': 'Terminal', 'powershell.exe': 'Terminal',
+            'pwsh.exe': 'Terminal', 'wt.exe': 'Terminal', 'powershell_ise.exe': 'Terminal'
         };
 
         if (mapping[filename]) {

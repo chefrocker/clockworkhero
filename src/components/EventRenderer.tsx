@@ -65,6 +65,7 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
 
     // --- LAYER 2: ACTIVITY STREAM (Auto) ---
     const slotRank = props.slotRank || 0;
+    const slotCount = props.slotCount || 1;
 
     // Gemeinsame Icon-Größen
     const iconSizeFull = 34;
@@ -125,19 +126,50 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
 
     // FALL B: ACTIVITY CARDS (Nur Tagesansicht ohne InputMode)
     // Volle Karten mit Text, rechtsbündig angeordnet.
-    const cardWidth = 220;
-    const cardGap = 10;
-    const rightMargin = 10;
-    const horizontalOffset = rightMargin + (slotRank * (cardWidth + cardGap));
+
+    // Dynamische Breitenberechnung:
+    // Wir lassen 10% Platz auf der linken Seite (für manuelle Zeitblock-Klicks).
+    // Wenn viele Karten nebeneinander liegen (slotCount > 3), verkleinern wir sie.
+    const maxDayWidth = 0.9; // 90% des Platzes darf genutzt werden
+    const defaultCardWidth = 220;
+    const cardGap = 8;
+    const rightMargin = 8;
+
+    // Wenn mehr als 3 Karten da sind, fangen wir an zu schrumpfen oder zu stapeln
+    let currentCardWidth = defaultCardWidth;
+    let slotRankInRow = slotRank;
+    let rowIndex = 0;
+
+    // Einfache Logik: Wenn die Karten die 90% Marke (ca. 800px) überschreiten würden,
+    // fangen wir eine neue Reihe an oder verkleinern sie.
+    // FullCalendar Spaltenbreite variiert, aber wir nehmen ca. 900px als Referenz für Desktop.
+    const estimatedColWidth = 900;
+    const usableWidth = estimatedColWidth * maxDayWidth;
+
+    if (slotCount * (defaultCardWidth + cardGap) > usableWidth) {
+        // Option 1: Karten schrumpfen (bis min 140px)
+        currentCardWidth = Math.max(140, Math.floor(usableWidth / slotCount) - cardGap);
+
+        // Option 2: Wenn immer noch zu breit, zweite Reihe (bei sehr vielen Slots)
+        if (currentCardWidth === 140 && (slotCount * (140 + cardGap) > usableWidth)) {
+            const cardsPerRow = Math.floor(usableWidth / (140 + cardGap));
+            slotRankInRow = slotRank % cardsPerRow;
+            rowIndex = Math.floor(slotRank / cardsPerRow);
+        }
+    }
+
+    const horizontalOffset = rightMargin + (slotRankInRow * (currentCardWidth + cardGap));
+    const verticalOffset = rowIndex * 40; // Versatz falls mehrere Reihen (selten)
 
     const containerStyle: React.CSSProperties = {
         backgroundColor: 'rgba(255, 255, 255, 0.98)',
         borderRight: `5px solid ${props.appColor}`,
         borderLeft: 'none',
-        height: '100%',
-        width: `${cardWidth}px`,
+        height: rowIndex > 0 ? '35px' : '100%', // Kleinere Höhe für untere Reihen
+        width: `${currentCardWidth}px`,
         position: 'absolute',
         right: `${horizontalOffset}px`,
+        top: rowIndex > 0 ? `${verticalOffset}px` : '0',
         display: 'flex',
         flexDirection: 'row-reverse',
         alignItems: 'center',
@@ -148,13 +180,16 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
         cursor: 'pointer',
         zIndex: 5 + slotRank,
         boxSizing: 'border-box',
-        pointerEvents: 'auto'
+        pointerEvents: 'auto',
+        transition: 'all 0.3s ease'
     };
 
     return (
         <div className="auto-event-container" style={containerStyle}>
             <div style={{
-                width: `${iconSizeFull}px`, height: `${iconSizeFull}px`, flexShrink: 0, marginLeft: '8px',
+                width: rowIndex > 0 ? '24px' : `${iconSizeFull}px`,
+                height: rowIndex > 0 ? '24px' : `${iconSizeFull}px`,
+                flexShrink: 0, marginLeft: '8px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: 'rgba(241, 245, 249, 0.9)',
                 borderRadius: '6px',
@@ -175,7 +210,8 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
                 textAlign: 'right'
             }}>
                 <div style={{
-                    fontSize: '0.85rem', fontWeight: '700', color: '#0f172a',
+                    fontSize: rowIndex > 0 ? '0.75rem' : '0.85rem',
+                    fontWeight: '700', color: '#0f172a',
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     lineHeight: '1.2'
                 }}>
