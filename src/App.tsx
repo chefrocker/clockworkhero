@@ -121,11 +121,27 @@ function App() {
         try {
           await logActiveWindow(db, title, path);
           lastSavedTitle.current = title;
+
+          // Verzögertes Refresh um DB-Schreibvorgang abzuschließen
+          setTimeout(() => {
+            refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings);
+          }, 100);
         } catch (e) { console.error("Fehler beim Speichern:", e); }
       }
     });
     return () => { unlistenPromise.then(unlisten => unlisten()); };
-  }, [db]);
+  }, [db, isEditMode, viewMode, settings]);
+
+  // Auto-Refresh Fallback (alle 60 Sekunden)
+  useEffect(() => {
+    if (!db) return;
+
+    const interval = setInterval(() => {
+      refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings);
+    }, 60000); // Alle 60 Sekunden
+
+    return () => clearInterval(interval);
+  }, [db, isEditMode, viewMode, settings]);
 
   // Refresh bei Modus-Wechsel
   useEffect(() => {
@@ -149,17 +165,27 @@ function App() {
     setProjects(projs);
   }
 
+  const [editingSessionData, setEditingSessionData] = useState<{ projectId: string, description: string } | null>(null);
+
+  // ... (existing code)
+
   const handleDateSelect = (info: any) => {
     setSelection({ start: info.start, end: info.end });
     setEditingSessionId(undefined);
+    setEditingSessionData(null); // Reset data for new session
     setShowSessionModal(true);
   };
 
   const handleEventClick = (info: any) => {
     const props = info.event.extendedProps;
-    if (props.type === 'manual' && isEditMode) {
+    if (props.type === 'manual') {
       setSelection({ start: info.event.start, end: info.event.end });
       setEditingSessionId(props.dbId);
+      // capture existing data
+      setEditingSessionData({
+        projectId: props.projectId,
+        description: props.description
+      });
       setShowSessionModal(true);
       return;
     }
@@ -282,6 +308,8 @@ function App() {
     }
   };
 
+  // ...
+
   return (
     <div className="app-container">
 
@@ -295,6 +323,7 @@ function App() {
         end={selection?.end || null}
         projects={projects}
         editingSessionId={editingSessionId}
+        initialData={editingSessionData} // Pass the data
       />
 
       <ActivityDetailModal
@@ -323,7 +352,7 @@ function App() {
         <div className="header-left">
           <div className="header-status">
             <span className={`status-dot ${isEditMode ? 'active' : ''}`}></span>
-            {isEditMode ? 'Modus: Eingabe' : 'Modus: ActivityCards'}
+            {isEditMode ? 'Modus: Arbeitstasks' : 'Modus: ActivityCards'}
           </div>
 
           <div className="timer-controls">
@@ -378,7 +407,7 @@ function App() {
             style={{ minWidth: '180px', justifyContent: 'center' }}
           >
             {isEditMode ? <FaPen /> : <FaChartPie />}
-            {isEditMode ? 'Modus: Eingabe' : 'Modus: ActivityCards'}
+            {isEditMode ? 'Modus: Arbeitstasks' : 'Modus: ActivityCards'}
           </button>
 
           <button className="btn-refresh" onClick={() => db && refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings)}>Refresh</button>

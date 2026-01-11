@@ -31,8 +31,10 @@ export const GeneralTab: React.FC<Props> = ({ settings, onChange, defaultSchedul
             <p className="settings-desc" style={{ color: 'var(--text-secondary)' }}>Wähle die Tage, die in der Wochenansicht angezeigt werden sollen.</p>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 {['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'].map((day, idx) => (
-                    <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', padding: '8px 12px', background: 'var(--bg-color)', borderRadius: '6px', border: '1px solid var(--border-color)', color: 'var(--text-color)' }}>
+                    <label key={idx} htmlFor={`show-day-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', padding: '8px 12px', background: 'var(--bg-color)', borderRadius: '6px', border: '1px solid var(--border-color)', color: 'var(--text-color)' }}>
                         <input
+                            id={`show-day-${idx}`}
+                            name={`show-day-${idx}`}
                             type="checkbox"
                             checked={!(settings.hiddenDays || []).includes(idx)}
                             onChange={() => toggleHiddenDay(idx)}
@@ -44,14 +46,23 @@ export const GeneralTab: React.FC<Props> = ({ settings, onChange, defaultSchedul
 
             <h3 className="settings-h3" style={{ marginTop: '40px', color: 'var(--text-color)' }}>Ziele</h3>
             <div className="input-group">
-                <label className="input-label">Tagesziel (Stunden)</label>
-                <input type="number" className="input-number" value={settings.dailyTarget || 0} onChange={e => onChange({ ...settings, dailyTarget: parseFloat(e.target.value) })} />
+                <label htmlFor="daily-target" className="input-label">Tagesziel (Stunden)</label>
+                <input
+                    id="daily-target"
+                    name="daily-target"
+                    type="number"
+                    className="input-number"
+                    value={settings.dailyTarget || 0}
+                    onChange={e => onChange({ ...settings, dailyTarget: parseFloat(e.target.value) })}
+                />
             </div>
 
             <h3 className="settings-h3" style={{ marginTop: '40px', color: 'var(--text-color)' }}>System</h3>
             <div className="input-group">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', color: 'var(--text-color)' }}>
+                <label htmlFor="autostart" style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', color: 'var(--text-color)' }}>
                     <input
+                        id="autostart"
+                        name="autostart"
                         type="checkbox"
                         checked={settings.autostart || false}
                         onChange={e => onChange({ ...settings, autostart: e.target.checked })}

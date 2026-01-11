@@ -1,120 +1,84 @@
-import React from 'react';
 import { FaTrash } from 'react-icons/fa';
 import { AppIcon } from './AppIcon';
 import { hexToRgba } from '../utils/imageUtils';
 
-export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string) => void, viewMode: 'day' | 'week') => {
-    const props = eventInfo.event.extendedProps;
-    const isInputMode = props.isEditMode;
-    const isCollapsed = props.isCollapsed;
+/**
+ * --- DOKUMENTATION DER LAYOUT-LOGIK (FINALE KORREKTUR) ---
+ * 
+ * 1. MODUS: ActivityCards (Analyse) [isInputMode = false]
+ *    - FOKUS: getrackte Apps (ActivityCards).
+ *    - ActivityCards: Deckkraft 1.0. TITEL SICHTBAR (Tagesansicht).
+ *    - Arbeitstasks: 10% Breite, transparent (0.4). Ganz links.
+ * 
+ * 2. MODUS: Arbeitstasks (Planung) [isInputMode = true]
+ *    - FOKUS: Projektbuchungen.
+ *    - Arbeitstasks: 50% Breite, Deckkraft 1.0. Ganz links.
+ *    - ActivityCards: Deckkraft 0.3. KEIN TEXT (nur Icons).
+ *    - Anordnung: ActivityCards liegen im 90% Bereich rechts und werden horizontal gestapelt.
+ * 
+ * 3. HORIZONTALES STACKING:
+ *    - Verwendet slotRank um hOffset (right) zu berechnen.
+ *    - Wächst von RECHTS nach LINKS (right: 0px, 40px, 80px...).
+ */
 
-    // --- LAYER 1: SESSIONS (Manuell) ---
-    if (props.type === 'manual') {
-        const baseColor = props.projectColor || '#3498db';
+export const renderEventContent = (eventInfo: any, onDelete?: (id: string) => void, viewMode: 'day' | 'week' = 'day', colWidth?: number, isTaskModeActive?: boolean) => {
+    const props = eventInfo.event.extendedProps;
+    const { type, simpleName, slotRank } = props;
+    // Priorität: Expliziter Parameter vor extendedProps
+    const isTaskMode = isTaskModeActive !== undefined ? isTaskModeActive : !!props.isInputMode;
+
+    // --- FALL A: MANUELLE SESSIONS (ARBEITSTASKS) ---
+    if (type === 'manual') {
+        const baseColor = props.projectColor || '#3b82f6';
+        const projectName = props.projectName || 'Projekt';
         const gradient = `linear-gradient(135deg, ${hexToRgba(baseColor, 0.95)} 0%, ${hexToRgba(baseColor, 0.8)} 100%)`;
 
-        return (
-            <div className="manual-session-block" style={{
-                background: gradient,
-                borderTop: '1px solid rgba(255,255,255,0.2)',
-                borderRight: '1px solid rgba(255,255,255,0.2)',
-                borderBottom: '1px solid rgba(255,255,255,0.2)',
-                borderLeft: 'none',
-                zIndex: 50, position: 'relative'
-            }}>
-                <div style={{
-                    position: 'absolute', right: '5px', bottom: '5px',
-                    opacity: 0.2, transform: 'rotate(-10deg)',
-                    width: '50px', height: '50px', pointerEvents: 'none',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center',
-                    filter: 'grayscale(100%) brightness(200%)'
-                }}>
-                    {props.projectIconType === 'image' ? (
-                        <img src={props.projectIcon} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                    ) : (
-                        <AppIcon appName={props.projectIcon || props.projectName} fallbackColor="white" className="watermark-icon" />
-                    )}
-                </div>
+        const taskWidthPercent = isTaskMode ? 50 : 20; // 20% im Activity-Mode wie gewünscht
 
-                <div style={{ position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                    <span style={{ fontWeight: '700', fontSize: '0.9rem', textShadow: '0 1px 2px rgba(0,0,0,0.2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {props.projectName}
-                    </span>
-                    <div
-                        style={{
-                            background: 'rgba(255,255,255,0.2)', color: 'white',
-                            width: '24px', height: '24px', borderRadius: '4px', cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: '5px'
-                        }}
-                        onClick={(e) => { e.stopPropagation(); onDeleteSession(eventInfo.event.id); }}
-                    >
-                        <FaTrash size={12} />
-                    </div>
-                </div>
-
-                <div style={{
-                    color: 'rgba(255,255,255,0.9)', fontSize: '0.8rem', fontWeight: '500',
-                    position: 'relative', zIndex: 2, marginTop: '4px',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                }}>
-                    {props.description}
-                </div>
-            </div>
-        );
-    }
-
-    // --- LAYER 2: ACTIVITY STREAM (Auto) ---
-    const slotRank = props.slotRank || 0;
-
-    // Gemeinsame Icon-Größen
-    const iconSizeFull = 34;
-    const iconSizeSmall = 24;
-
-    // FALL A: NUR SYMBOLE (Wochenansicht, InputMode, oder Kollision)
-    if (isInputMode || isCollapsed || viewMode === 'week') {
-        const iconSize = (viewMode === 'week') ? iconSizeSmall : (isInputMode ? iconSizeSmall : iconSizeFull);
-        const gap = 6;
-
-        const maxCols = (viewMode === 'week') ? 2 : 5;
-        const col = slotRank % maxCols;
-        const row = Math.floor(slotRank / maxCols);
-
-        // Rechtsbündig mit minimalem Margin (2%)
-        // Gesamtplatz bis 90% des Tages nutzbar (wird hier durch maxCols begrenzt)
-        const horizontalOffset = col * (iconSize + gap);
-        const verticalOffset = row * (iconSize + 4);
+        const taskOpacity = isTaskMode ? 1.0 : 0.4;
+        // Arbeitstasks liegen immer über den ActivityCards (die haben max 100)
+        const taskZIndex = 500;
 
         return (
             <div style={{
+                height: '100%',
+                width: `${taskWidthPercent}%`,
                 position: 'absolute',
-                top: `${verticalOffset}px`,
-                right: `calc(2% + ${horizontalOffset}px)`,
-                width: `${iconSize}px`,
-                height: `${iconSize}px`,
-                display: 'flex', justifyContent: 'center', alignItems: 'center',
+                left: 0,
+                padding: '4px 8px',
+                background: gradient,
+                color: 'white',
+                borderRadius: '6px',
+                fontSize: '0.82rem',
+                border: '1px solid rgba(255,255,255,0.3)',
+                overflow: 'hidden',
+                boxShadow: isTaskMode ? '0 4px 12px rgba(0,0,0,0.2)' : 'none',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+                zIndex: taskZIndex,
+                boxSizing: 'border-box',
                 pointerEvents: 'auto',
-                zIndex: 10 + slotRank,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
+                opacity: taskOpacity,
+                transition: 'all 0.2s ease-out',
+                cursor: 'pointer' // ← HINZUFÜGEN: Zeigt an, dass Element klickbar ist
             }}>
-                <div style={{
-                    width: `${iconSize}px`, height: `${iconSize}px`,
-                    opacity: isCollapsed ? 0.5 : 1,
-                    background: isCollapsed ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.95)',
-                    borderRadius: '5px',
-                    boxShadow: isCollapsed ? 'none' : '0 2px 4px rgba(0,0,0,0.12)',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center',
-                    padding: '2px',
-                    boxSizing: 'border-box',
-                    border: '1px solid rgba(0,0,0,0.08)',
-                }}
-                    className="hover-scale"
-                >
-                    {props.appIcon ? (
-                        <img src={props.appIcon} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
-                    ) : (
-                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <AppIcon path={props.exePath} appName={props.simpleName} fallbackColor={props.appColor} />
+                {/* Text immer anzeigen, wird durch overflow hidden abgeschnitten wenn zu klein */}
+                <div style={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        fontSize: isTaskMode ? '0.82rem' : '0.7rem'
+                    }}>
+                        {projectName} - {props.description}
+                    </span>
+                    {onDelete && isTaskMode && (
+                        <div
+                            style={{ cursor: 'pointer', opacity: 0.8, display: 'flex', alignItems: 'center' }}
+                            onClick={(e) => { e.stopPropagation(); onDelete(eventInfo.event.id); }}
+                        >
+                            <FaTrash size={10} />
                         </div>
                     )}
                 </div>
@@ -122,81 +86,112 @@ export const renderEventContent = (eventInfo: any, onDeleteSession: (id: string)
         );
     }
 
-    // FALL B: ACTIVITY CARDS (Nur Tagesansicht ohne InputMode)
-    // - Einheitliche Größe (200px)
-    // - Rechtsbündig angeordnet
-    // - Max 90% Abdeckung (10% links bleibt frei)
+    // --- FALL B: ACTIVITY CARDS (AUTO) ---
+    if (type === 'auto') {
+        const iconSize = 32;
+        const gap = 8;
+        const activityOpacity = isTaskMode ? 0.3 : 1.0;
 
-    const fixedCardWidth = 200;
-    const cardGap = 10;
-    const rightPadding = 10; // Kleiner Abstand vom rechten Rand
+        // Wir messen die Breite der Spalte. Falls noch nicht gemessen, Fallback auf 200.
+        const W = colWidth || 200;
+        const usefulWidth = W * 0.9;
+        const edgeOffset = 4;
 
-    // Schätzung: Wie viele Karten passen in 90% der Spalte (ca. 800px nutzbar)?
-    const cardsPerRow = 4;
+        // --- 1. WOCHE ODER IM ARBEITSTASK-MODUS: Nur Icons (Horizontale Stapelung) ---
+        if (viewMode === 'week' || isTaskMode) {
+            const maxCols = Math.max(1, Math.floor((usefulWidth - edgeOffset) / (iconSize + gap)));
 
-    const colIndex = slotRank % cardsPerRow;
-    const rowIndex = Math.floor(slotRank / cardsPerRow);
 
-    const horizontalOffset = rightPadding + (colIndex * (fixedCardWidth + cardGap));
-    const verticalOffset = rowIndex * 34; // Versatz für weitere Reihen
+            // Sichtbarkeitscheck ENTFERNT - User möchte alle Icons sehen
+            // const maxVisibleIcons = maxCols * 3; 
 
-    const containerStyle: React.CSSProperties = {
-        backgroundColor: 'rgba(255, 255, 255, 0.98)',
-        borderRight: `5px solid ${props.appColor}`,
-        borderLeft: 'none',
-        height: rowIndex > 0 ? '30px' : '100%', // Erste Reihe volle Höhe, weitere kompakt
-        width: `${fixedCardWidth}px`,
-        position: 'absolute',
-        right: `${horizontalOffset}px`, // Von rechts nach links
-        top: rowIndex > 0 ? `${verticalOffset}px` : '0',
-        display: 'flex',
-        flexDirection: 'row-reverse',
-        alignItems: 'center',
-        padding: '0 8px',
-        boxShadow: '-2px 2px 6px rgba(0,0,0,0.08)',
-        borderRadius: '6px 0 0 6px',
-        overflow: 'hidden',
-        cursor: 'pointer',
-        zIndex: 5 + slotRank,
-        boxSizing: 'border-box',
-        pointerEvents: 'auto',
-        transition: 'all 0.2s ease'
-    };
 
-    return (
-        <div className="auto-event-container" style={containerStyle}>
-            <div style={{
-                width: rowIndex > 0 ? '22px' : `${iconSizeFull}px`,
-                height: rowIndex > 0 ? '22px' : `${iconSizeFull}px`,
-                flexShrink: 0, marginLeft: '8px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'rgba(241, 245, 249, 0.9)',
-                borderRadius: '6px',
-                padding: '2px',
-                boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.08)',
-                boxSizing: 'border-box'
-            }}>
-                {props.appIcon ? (
-                    <img src={props.appIcon} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
-                ) : (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <AppIcon path={props.exePath} appName={props.simpleName} fallbackColor={props.appColor} />
-                    </div>
-                )}
-            </div>
-            <div style={{
-                flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden',
-                textAlign: 'right'
-            }}>
+            const col = (slotRank || 0) % maxCols;
+            const row = Math.floor((slotRank || 0) / maxCols);
+
+            // Von Rechts nach Links wachsen
+            const hOffset = edgeOffset + (col * (iconSize + gap));
+            const vOffset = 2 + (row * (iconSize + gap));
+
+            return (
                 <div style={{
-                    fontSize: rowIndex > 0 ? '0.75rem' : '0.82rem',
-                    fontWeight: '700', color: '#0f172a',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    lineHeight: '1.2'
+                    position: 'absolute',
+                    right: `${hOffset}px`,
+                    top: `${vOffset}px`,
+                    width: `${iconSize}px`,
+                    height: `${iconSize}px`,
+                    zIndex: 10 + (slotRank || 0),
+                    pointerEvents: 'auto',
+                    opacity: activityOpacity,
+                    transition: 'all 0.2s ease-out',
+                    // NEU: Overflow verstecken entfernt
+                    // overflow: 'hidden'
                 }}>
-                    {props.simpleName}
+                    <div style={{
+                        width: '100%',
+                        height: '100%',
+                        padding: '4px',
+                        background: 'rgba(255,255,255,0.98)',
+                        borderRadius: '6px',
+                        boxSizing: 'border-box',
+                        boxShadow: '0 2px 5px rgba(0,0,0,0.15)',
+                        border: '1px solid rgba(0,0,0,0.1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}>
+                        <AppIcon appName={simpleName} path={props.exePath} fallbackColor={props.appColor} />
+                    </div>
+                </div>
+            );
+        }
+
+        // --- 2. TAG-ANSICHT (ACTIVITY MODE / ANALYSE): Große Karten MIT NAME ---
+        // Hier stapeln wir auch horizontal, falls mehrere Apps im selben Slot sind
+        const cardWidth = 180;
+        const cardGap = 10;
+        const maxCards = Math.max(1, Math.floor((usefulWidth - edgeOffset) / (cardWidth + cardGap)));
+
+        const cardCol = (slotRank || 0) % maxCards;
+        const cardRow = Math.floor((slotRank || 0) / maxCards);
+
+        const hOffset = edgeOffset + (cardCol * (cardWidth + cardGap));
+        const vOffset = cardRow * 42;
+
+        return (
+            <div style={{
+                position: 'absolute',
+                right: `${hOffset}px`,
+                top: `${vOffset}px`,
+                width: `${cardWidth}px`,
+                height: '38px',
+                padding: '0 10px',
+                background: 'var(--panel-bg)',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                border: '1px solid var(--border-color)',
+                borderRight: `5px solid ${props.appColor || 'var(--primary)'}`,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                fontSize: '0.85rem',
+                color: 'var(--text-color)',
+                zIndex: 10 + (slotRank || 0),
+                overflow: 'hidden',
+                boxSizing: 'border-box',
+                pointerEvents: 'auto',
+                opacity: activityOpacity,
+                transition: 'all 0.2s ease-out'
+            }} className="hover-scale">
+                <div style={{ width: '28px', height: '28px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <AppIcon appName={simpleName} path={props.exePath} fallbackColor={props.appColor} />
+                </div>
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 'bold', flex: 1 }}>
+                    {simpleName}
                 </div>
             </div>
-        </div>
-    );
+        );
+    }
+
+    return null;
 };

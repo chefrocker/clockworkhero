@@ -1,6 +1,6 @@
 [package]
 name = "clockworkhero"
-version = "0.9.4-beta"
+version = "0.9.5-beta"
 description = "ClockworkHero - Zeiterfassung und Aktivitätstracking"
 authors = ["you"]
 edition = "2021"

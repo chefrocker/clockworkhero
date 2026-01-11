@@ -233,8 +233,8 @@ export const SettingsModal: React.FC<Props> = ({
                         <Cropper image={cropImageSrc} crop={crop} zoom={zoom} aspect={1} onCropChange={setCrop} onCropComplete={onCropComplete} onZoomChange={setZoom} />
                     </div>
                     <div style={{ padding: '20px', background: '#2c3e50', display: 'flex', gap: '20px', justifyContent: 'center', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 'bold', color: 'white' }}>Zoom:</span>
-                        <input type="range" value={zoom} min={1} max={3} step={0.1} onChange={(e) => setZoom(Number(e.target.value))} />
+                        <label htmlFor="zoom-slider" style={{ fontWeight: 'bold', color: 'white' }}>Zoom:</label>
+                        <input id="zoom-slider" name="zoom-slider" type="range" value={zoom} min={1} max={3} step={0.1} onChange={(e) => setZoom(Number(e.target.value))} />
                         <button className="btn-secondary" onClick={() => setCropImageSrc(null)}><FaTimes /> Abbrechen</button>
                         <button className="btn-save" onClick={saveCroppedImage}><FaCheck /> Übernehmen</button>
                     </div>
@@ -283,12 +283,29 @@ export const SettingsModal: React.FC<Props> = ({
                                 <div style={{ marginBottom: '30px', background: 'var(--bg-color)', padding: '20px', borderRadius: '8px' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                                         <label className="input-label" style={{ margin: 0 }}>Gruppierung: {localSettings.groupingThreshold} Minuten</label>
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-color)' }}>
-                                            <input type="checkbox" checked={localSettings.autoGrouping} onChange={e => setLocalSettings({ ...localSettings, autoGrouping: e.target.checked })} />
+                                        <label htmlFor="auto-grouping" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-color)' }}>
+                                            <input
+                                                id="auto-grouping"
+                                                name="auto-grouping"
+                                                type="checkbox"
+                                                checked={localSettings.autoGrouping}
+                                                onChange={e => setLocalSettings({ ...localSettings, autoGrouping: e.target.checked })}
+                                            />
                                             Automatik
                                         </label>
                                     </div>
-                                    <input type="range" min="1" max="240" step="1" style={{ width: '100%', opacity: localSettings.autoGrouping ? 0.4 : 1, pointerEvents: localSettings.autoGrouping ? 'none' : 'auto' }} value={localSettings.groupingThreshold || 5} onChange={e => setLocalSettings({ ...localSettings, groupingThreshold: parseInt(e.target.value) })} />
+                                    <label htmlFor="grouping-threshold" className="sr-only" style={{ display: 'none' }}>Gruppierungs-Schwellenwert</label>
+                                    <input
+                                        id="grouping-threshold"
+                                        name="grouping-threshold"
+                                        type="range"
+                                        min="1"
+                                        max="240"
+                                        step="1"
+                                        style={{ width: '100%', opacity: localSettings.autoGrouping ? 0.4 : 1, pointerEvents: localSettings.autoGrouping ? 'none' : 'auto' }}
+                                        value={localSettings.groupingThreshold || 5}
+                                        onChange={e => setLocalSettings({ ...localSettings, groupingThreshold: parseInt(e.target.value) })}
+                                    />
                                     {localSettings.autoGrouping && (
                                         <p style={{ fontSize: '0.75rem', color: '#3b82f6', marginTop: '8px' }}>Das Programm wählt den besten Schwellenwert automatisch.</p>
                                     )}
@@ -311,7 +328,8 @@ export const SettingsModal: React.FC<Props> = ({
                             <div>
                                 <h3 className="settings-h3" style={{ color: 'var(--text-color)' }}>Activity Farben & Icons</h3>
                                 <p className="settings-desc" style={{ color: 'var(--text-secondary)' }}>Klicke auf das Icon, um ein eigenes Bild hochzuladen.</p>
-                                <input className="input-text" placeholder="Suchen..." value={appSearch} onChange={e => setAppSearch(e.target.value)} style={{ marginBottom: '20px' }} />
+                                <label htmlFor="app-search" className="sr-only" style={{ display: 'none' }}>Programme suchen</label>
+                                <input id="app-search" name="app-search" className="input-text" placeholder="Suchen..." value={appSearch} onChange={e => setAppSearch(e.target.value)} style={{ marginBottom: '20px' }} />
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '10px', maxHeight: '400px', overflowY: 'auto' }}>
                                     {knownApps.filter(a => a.name.toLowerCase().includes(appSearch.toLowerCase())).map(app => (
                                         <div key={app.name} style={{ background: 'var(--bg-color)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -321,7 +339,15 @@ export const SettingsModal: React.FC<Props> = ({
                                             <div style={{ flex: 1, overflow: 'hidden' }}>
                                                 <div style={{ fontSize: '0.9rem', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-color)' }} title={app.name}>{app.name}</div>
                                             </div>
-                                            <input type="color" value={colorToHex(app.color)} onChange={e => handleAppColorChange(app.name, e.target.value)} style={{ width: '30px', height: '30px', border: 'none', cursor: 'pointer', borderRadius: '50%' }} />
+                                            <label htmlFor={`app-color-${app.name}`} className="sr-only" style={{ display: 'none' }}>Farbe für {app.name}</label>
+                                            <input
+                                                id={`app-color-${app.name}`}
+                                                name={`app-color-${app.name}`}
+                                                type="color"
+                                                value={colorToHex(app.color)}
+                                                onChange={e => handleAppColorChange(app.name, e.target.value)}
+                                                style={{ width: '30px', height: '30px', border: 'none', cursor: 'pointer', borderRadius: '50%' }}
+                                            />
                                         </div>
                                     ))}
                                 </div>
@@ -336,7 +362,17 @@ export const SettingsModal: React.FC<Props> = ({
                                         <FaLock size={32} style={{ color: 'var(--text-secondary)', marginBottom: '15px' }} />
                                         <p style={{ color: 'var(--text-color)' }}>Dieser Bereich ist geschützt.</p>
                                         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '15px' }}>
-                                            <input type="password" placeholder="Passwort" className="input-text" style={{ width: '200px' }} value={dbPasswordInput} onChange={e => setDbPasswordInput(e.target.value)} />
+                                            <label htmlFor="db-unlock-password" className="sr-only" style={{ display: 'none' }}>Passwort zum Entsperren</label>
+                                            <input
+                                                id="db-unlock-password"
+                                                name="db-unlock-password"
+                                                type="password"
+                                                placeholder="Passwort"
+                                                className="input-text"
+                                                style={{ width: '200px' }}
+                                                value={dbPasswordInput}
+                                                onChange={e => setDbPasswordInput(e.target.value)}
+                                            />
                                             <button className="btn-save" onClick={handleDbUnlock}><FaUnlock /> Entsperren</button>
                                         </div>
                                     </div>
@@ -353,7 +389,16 @@ export const SettingsModal: React.FC<Props> = ({
                                                 </div>
                                             ) : (
                                                 <div style={{ display: 'flex', gap: '10px' }}>
-                                                    <input type="password" placeholder="Neues Passwort setzen" className="input-text" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+                                                    <label htmlFor="new-admin-password" className="sr-only" style={{ display: 'none' }}>Neues Admin Passwort</label>
+                                                    <input
+                                                        id="new-admin-password"
+                                                        name="new-admin-password"
+                                                        type="password"
+                                                        placeholder="Neues Passwort setzen"
+                                                        className="input-text"
+                                                        value={newPassword}
+                                                        onChange={e => setNewPassword(e.target.value)}
+                                                    />
                                                     <button className="btn-save" onClick={handleSetPassword} style={{ background: '#10b981' }}>Aktivieren</button>
                                                 </div>
                                             )}
@@ -388,7 +433,7 @@ export const SettingsModal: React.FC<Props> = ({
                         {activeTab === 'about' && (
                             <div style={{ textAlign: 'center', padding: '40px' }}>
                                 <h2 style={{ color: 'var(--text-color)', marginBottom: '10px' }}>ClockworkHero</h2>
-                                <div style={{ fontSize: '1.2rem', color: 'var(--text-secondary)', marginBottom: '30px' }}>Version 0.9.4-beta</div>
+                                <div style={{ fontSize: '1.2rem', color: 'var(--text-secondary)', marginBottom: '30px' }}>Version 0.9.5</div>
                                 <div style={{ background: 'var(--bg-color)', padding: '30px', borderRadius: '12px', border: '1px solid var(--border-color)', maxWidth: '600px', margin: '0 auto', textAlign: 'left' }}>
                                     <h4 style={{ marginTop: 0, color: 'var(--text-color)' }}>MIT License</h4>
                                     <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>Copyright (c) 2025 Sandro Ballarini</p>

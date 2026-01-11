@@ -31,21 +31,30 @@ const processEventsForOverlaps = (rawEvents: any[]) => {
     const manualEvents = events.filter(e => e.extendedProps.type === 'manual');
     const autoEvents = events.filter(e => e.extendedProps.type === 'auto');
 
+    // 1. Sortieren nach Zeit
+    autoEvents.sort((a, b) => {
+        const tA = new Date(a.start).getTime();
+        const tB = new Date(b.start).getTime();
+        if (tA !== tB) return tA - tB;
+        // Bei gleicher Zeit nach ID/Title für Stabilität sortieren
+        return (a.title || '').localeCompare(b.title || '');
+    });
+
+    // 2. Ranking zuweisen (für Grid-Positionierung)
+    const slotMap = new Map<string, number>();
+
     autoEvents.forEach(auto => {
-        const autoStart = auto.start instanceof Date ? auto.start.getTime() : new Date(auto.start).getTime();
-        const autoEnd = auto.end instanceof Date ? auto.end.getTime() : new Date(auto.end).getTime();
+        // Keine automatische Kollabierung mehr nötig durch 90/10 Split
+        auto.extendedProps.isCollapsed = false;
 
-        // Check: Kollidiert dieses Auto-Event mit IRGENDEINEM manuellen Event?
-        const hasOverlap = manualEvents.some(manual => {
-            const manualStart = manual.start instanceof Date ? manual.start.getTime() : new Date(manual.start).getTime();
-            const manualEnd = manual.end instanceof Date ? manual.end.getTime() : new Date(manual.end).getTime();
+        // Bucket Key (z.B. gleiche Startzeit)
+        // Wir nehmen an, dass Events sauber auf 5-Minuten Slots kommen. 
+        // Falls nicht, runden wir hier NICHT, damit präzise Events nicht falsch gruppiert werden.
+        const key = new Date(auto.start).toISOString();
+        const rank = slotMap.get(key) || 0;
 
-            // Kollisionsformel: (StartA < EndB) && (EndA > StartB)
-            return (autoStart < manualEnd && autoEnd > manualStart);
-        });
-
-        // Flag setzen
-        auto.extendedProps.isCollapsed = hasOverlap;
+        auto.extendedProps.slotRank = rank;
+        slotMap.set(key, rank + 1);
     });
 
     return [...manualEvents, ...autoEvents];
@@ -60,6 +69,7 @@ export const CalendarEngine: React.FC<Props> = ({
     const calendarRef = useRef<FullCalendar>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [slotHeight, setSlotHeight] = useState(60);
+    const [colWidth, setColWidth] = useState(200); // Default-Wert
     const scrollPosRef = useRef<number>(0);
 
     // FIX: scrollTime nur initial anwenden, danach null, damit Re-Renders nicht springen
@@ -99,6 +109,47 @@ export const CalendarEngine: React.FC<Props> = ({
             });
         }
     }, [processedEvents, slotHeight, events]);
+
+    const hiddenDaysKey = (hiddenDays || []).join(',');
+
+    // Messung der Spaltenbreite
+    useLayoutEffect(() => {
+        const measure = () => {
+            const container = containerRef.current;
+            if (!container) return;
+
+            // Suche nach der Kalenderspalte
+            const col = container.querySelector('.fc-timegrid-col');
+            if (col) {
+                const width = col.clientWidth;
+                if (width > 20) {
+                    setColWidth(width);
+                }
+            }
+        };
+
+        measure();
+        const t1 = setTimeout(measure, 100);
+        const t2 = setTimeout(measure, 500);
+
+        const observer = new ResizeObserver(measure);
+        if (containerRef.current) observer.observe(containerRef.current);
+
+        window.addEventListener('resize', measure);
+        return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
+            observer.disconnect();
+            window.removeEventListener('resize', measure);
+        };
+    }, [viewMode, hiddenDaysKey]);
+
+    // Wenn sich die Breite massiv ändert, Kalender-API mitteilen
+    useEffect(() => {
+        if (calendarRef.current) {
+            calendarRef.current.getApi().updateSize();
+        }
+    }, [colWidth]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -144,11 +195,11 @@ export const CalendarEngine: React.FC<Props> = ({
     const handleNext = () => calendarRef.current?.getApi().next();
     const handleToday = () => calendarRef.current?.getApi().today();
 
-    const getBusinessHours = () => {
+    const businessHours = useMemo(() => {
         if (!weekSchedule || weekSchedule.length === 0) {
             return { daysOfWeek: [1, 2, 3, 4, 5], startTime: workStart || '08:00', endTime: workEnd || '17:00' };
         }
-        const hours: { daysOfWeek: number[]; startTime: string; endTime: string; }[] = [];
+        const hours: any[] = [];
         weekSchedule.forEach((day, idx) => {
             if (day.isWorkday && day.blocks) {
                 const fcDayIndex = (idx + 1) % 7;
@@ -158,7 +209,9 @@ export const CalendarEngine: React.FC<Props> = ({
             }
         });
         return hours;
-    };
+    }, [weekSchedule, workStart, workEnd]);
+
+    const [currentViewDate, setCurrentViewDate] = useState<Date>(new Date());
 
     const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const date = e.target.value;
@@ -168,18 +221,76 @@ export const CalendarEngine: React.FC<Props> = ({
     };
 
     const getCurrentDateLabel = () => {
-        if (!calendarRef.current) return '';
-        const api = calendarRef.current.getApi();
-        const date = api.getDate();
-
         // Format: "Mi. 24.12."
         const options: Intl.DateTimeFormatOptions = { weekday: 'short', day: '2-digit', month: '2-digit' };
-        return date.toLocaleDateString('de-DE', options).replace(',', '');
+        return currentViewDate.toLocaleDateString('de-DE', options).replace(',', '');
     };
+
+    // Auto-Zoom Logic based on Event Density
+    useLayoutEffect(() => {
+        if (viewMode !== 'week' && viewMode !== 'day') return;
+
+        // Spaltenbreite nutzen um zu wissen wie viele Icons nebeneinander passen
+        // Dies muss exakt der Logik im Renderer entsprechen!
+        const iconSize = 32;
+        const gap = 8;
+        const lineHeight = iconSize + gap;
+        const usefulWidth = colWidth * 0.9;
+        const edgeOffset = 4;
+
+        // Berechnung wie viele Icons pro Zeile passen:
+        const maxCols = Math.max(1, Math.floor((usefulWidth - edgeOffset) / (iconSize + gap)));
+
+        // Maximal benötigte Zeilen finden
+        let maxRowsNeeded = 0;
+
+        // Wir nutzen die PRE-PROCESSED Events, die bereits slotRank haben!
+        const autoEvents = processedEvents.filter(e => e.extendedProps.type === 'auto');
+
+        if (autoEvents.length > 0) {
+            // Wir gruppieren nochmal nach Slot-Key um den höchsten Rank pro Slot zu finden
+            const maxRankPerSlot = new Map<string, number>();
+
+            autoEvents.forEach(e => {
+                const start = new Date(e.start).getTime();
+                // Runden auf 15-min Blöcke (für Zoom-Entscheidung des TimeGrids)
+                // Da ein 15-Min Slot visuell eine Einheit ist, bestimmt der vollste Teil-Slot die Höhe
+                // ABER: FullCalendar Slots sind flexibel. Wir wollen den Zoom nur erhöhen wenn EINE Zeile überläuft.
+                const key = start.toString();
+                const rank = e.extendedProps.slotRank || 0;
+
+                const currentMax = maxRankPerSlot.get(key) || 0;
+                if (rank > currentMax) maxRankPerSlot.set(key, rank);
+            });
+
+            // Nun prüfen wir jeden Slot: Wie viele Zeilen braucht der höchste Rank?
+            // Formel: row = Math.floor(rank / maxCols) -> Zeilen sind 0-indexed, also count = floor(rank/cols) + 1
+            maxRankPerSlot.forEach((maxRank) => {
+                const rows = Math.floor(maxRank / maxCols) + 1;
+                if (rows > maxRowsNeeded) maxRowsNeeded = rows;
+            });
+        }
+
+        // Standard ist 1 Zeile mindestens, falls Events da sind
+        if (maxRowsNeeded < 1) maxRowsNeeded = 1;
+
+        // Calculate required slot height: maxRows * lineHeight
+        // Minimum 60px height (Standard)
+        // Puffer hinzufügen (+10px)
+        const requiredHeight = Math.max(60, maxRowsNeeded * lineHeight + 10);
+
+        // Update slotHeight if it differs significantly (>5px diff)
+        if (Math.abs(requiredHeight - slotHeight) > 5) {
+            setSlotHeight(requiredHeight);
+        }
+
+    }, [processedEvents, colWidth, viewMode, slotHeight]);
 
     return (
         <div ref={containerRef} style={{
             height: '100%', display: 'flex', flexDirection: 'column',
+            width: viewMode === 'day' ? '90%' : '95%', // ← 90% bei Tag, sonst 95%
+            margin: '0 auto', // ← Zentrierung
             // @ts-ignore
             '--slot-height': `${slotHeight}px`
         }}>
@@ -205,6 +316,7 @@ export const CalendarEngine: React.FC<Props> = ({
                             </label>
                             <input
                                 id="date-jumper"
+                                name="date-jumper"
                                 type="date"
                                 onChange={handleDateChange}
                                 style={{
@@ -227,6 +339,7 @@ export const CalendarEngine: React.FC<Props> = ({
                     headerToolbar={false}
                     events={processedEvents} // <-- Hier die verarbeiteten Events nutzen
                     editable={true}
+                    eventResizableFromStart={true} // <-- TOP RESIZING
                     selectable={true}
                     selectMirror={true}
                     dayMaxEvents={true}
@@ -243,12 +356,18 @@ export const CalendarEngine: React.FC<Props> = ({
                     eventOrder={["order", "start", "-duration", "allDay", "title"]} // Manual hat order 1, Auto order 2 -> Manual zuerst rendern? Nein, Z-Index regelt das.
 
                     hiddenDays={hiddenDays || []}
-                    businessHours={getBusinessHours()}
+                    businessHours={businessHours}
 
                     height="100%"
                     slotDuration="00:15:00"
                     slotLabelInterval="01:00"
-                    eventContent={(info) => renderEventContent(info, onDeleteSession, viewMode)}
+                    datesSet={(info) => {
+                        const newDate = info.view.currentStart;
+                        if (currentViewDate.getTime() !== newDate.getTime()) {
+                            setCurrentViewDate(newDate);
+                        }
+                    }}
+                    eventContent={(info) => renderEventContent(info, onDeleteSession, viewMode, colWidth, isEditMode)}
                     select={onDateSelect}
                     eventClick={onEventClick}
                     eventDrop={onEventDrop}

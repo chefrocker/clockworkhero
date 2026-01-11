@@ -8,14 +8,14 @@ interface Props {
 }
 
 export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) => {
-  
+
   const addBlock = (dayIndex: number) => {
     const updated = [...weekSchedule];
-    updated[dayIndex] = { 
-        ...updated[dayIndex], 
-        blocks: [...updated[dayIndex].blocks] 
+    updated[dayIndex] = {
+      ...updated[dayIndex],
+      blocks: [...updated[dayIndex].blocks]
     };
-    
+
     const newBlock: WorkTimeBlock = {
       id: `block-${Date.now()}`,
       start: "13:00",
@@ -28,9 +28,9 @@ export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) 
 
   const removeBlock = (dayIndex: number, blockId: string) => {
     const updated = [...weekSchedule];
-    updated[dayIndex] = { 
-        ...updated[dayIndex], 
-        blocks: updated[dayIndex].blocks.filter(b => b.id !== blockId) 
+    updated[dayIndex] = {
+      ...updated[dayIndex],
+      blocks: updated[dayIndex].blocks.filter(b => b.id !== blockId)
     };
     updated[dayIndex] = calculateDayHours(updated[dayIndex]);
     onChange(updated);
@@ -38,16 +38,16 @@ export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) 
 
   const updateBlock = (dayIndex: number, blockId: string, field: 'start' | 'end', value: string) => {
     const updated = [...weekSchedule];
-    updated[dayIndex] = { 
-        ...updated[dayIndex], 
-        blocks: [...updated[dayIndex].blocks] 
+    updated[dayIndex] = {
+      ...updated[dayIndex],
+      blocks: [...updated[dayIndex].blocks]
     };
-    
+
     const blockIndex = updated[dayIndex].blocks.findIndex(b => b.id === blockId);
     if (blockIndex !== -1) {
-      updated[dayIndex].blocks[blockIndex] = { 
-          ...updated[dayIndex].blocks[blockIndex], 
-          [field]: value 
+      updated[dayIndex].blocks[blockIndex] = {
+        ...updated[dayIndex].blocks[blockIndex],
+        [field]: value
       };
       updated[dayIndex] = calculateDayHours(updated[dayIndex]);
       onChange(updated);
@@ -57,7 +57,7 @@ export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) 
   const toggleWorkday = (dayIndex: number) => {
     const updated = [...weekSchedule];
     updated[dayIndex] = { ...updated[dayIndex], isWorkday: !updated[dayIndex].isWorkday };
-    
+
     if (!updated[dayIndex].isWorkday) {
       updated[dayIndex].totalHours = 0;
     } else if (updated[dayIndex].blocks.length === 0) {
@@ -68,14 +68,14 @@ export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) 
       }];
       updated[dayIndex] = calculateDayHours(updated[dayIndex]);
     } else {
-        updated[dayIndex] = calculateDayHours(updated[dayIndex]);
+      updated[dayIndex] = calculateDayHours(updated[dayIndex]);
     }
     onChange(updated);
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-      
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
         <h3 className="settings-h3" style={{ margin: 0 }}>Wochenplan</h3>
         <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
@@ -102,7 +102,7 @@ function calculateDayHours(day: DaySchedule): DaySchedule {
   if (!day.blocks || day.blocks.length === 0) {
     return { ...day, totalHours: 0 };
   }
-  
+
   let totalMinutes = 0;
   day.blocks.forEach(block => {
     const [startH, startM] = block.start.split(':').map(Number);
@@ -111,7 +111,7 @@ function calculateDayHours(day: DaySchedule): DaySchedule {
     const endMins = endH * 60 + endM;
     totalMinutes += Math.max(0, endMins - startMins);
   });
-  
+
   return { ...day, totalHours: parseFloat((totalMinutes / 60).toFixed(2)) };
 }
 
@@ -134,11 +134,13 @@ const DayCard: React.FC<DayCardProps> = ({ day, dayIndex, onToggleWorkday, onAdd
       opacity: day.isWorkday ? 1 : 0.7,
       transition: 'all 0.2s'
     }}>
-      
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: day.isWorkday ? '15px' : '0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+          <label htmlFor={`workday-${dayIndex}`} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
             <input
+              id={`workday-${dayIndex}`}
+              name={`workday-${dayIndex}`}
               type="checkbox"
               checked={day.isWorkday}
               onChange={() => onToggleWorkday(dayIndex)}
@@ -146,7 +148,7 @@ const DayCard: React.FC<DayCardProps> = ({ day, dayIndex, onToggleWorkday, onAdd
             />
             <span style={{ fontWeight: 'bold', fontSize: '1rem', color: day.isWorkday ? 'var(--text-color)' : 'var(--text-secondary)' }}>{day.dayName}</span>
           </label>
-          
+
           {day.isWorkday && (
             <span style={{
               background: '#dbeafe',
@@ -185,7 +187,10 @@ const DayCard: React.FC<DayCardProps> = ({ day, dayIndex, onToggleWorkday, onAdd
               border: '1px solid var(--border-color)'
             }}>
               <FaClock color="var(--text-secondary)" size={14} />
+              <label htmlFor={`start-${block.id}`} className="sr-only" style={{ display: 'none' }}>Startzeit</label>
               <input
+                id={`start-${block.id}`}
+                name={`start-${block.id}`}
                 type="time"
                 className="input-time"
                 value={block.start}
@@ -193,14 +198,17 @@ const DayCard: React.FC<DayCardProps> = ({ day, dayIndex, onToggleWorkday, onAdd
                 style={{ width: '100px', height: '32px', padding: '4px 8px' }}
               />
               <span style={{ color: 'var(--text-secondary)', fontWeight: 'bold' }}>—</span>
+              <label htmlFor={`end-${block.id}`} className="sr-only" style={{ display: 'none' }}>Endzeit</label>
               <input
+                id={`end-${block.id}`}
+                name={`end-${block.id}`}
                 type="time"
                 className="input-time"
                 value={block.end}
                 onChange={(e) => onUpdateBlock(dayIndex, block.id, 'end', e.target.value)}
                 style={{ width: '100px', height: '32px', padding: '4px 8px' }}
               />
-              
+
               <button
                 onClick={() => onRemoveBlock(dayIndex, block.id)}
                 style={{

@@ -201,14 +201,17 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
 
   const logs = await db.select<LogEntry[]>("SELECT * FROM logs ORDER BY created_at ASC LIMIT 15000");
   if (logs.length > 0) {
-    // Sicherstellen, dass das Intervall ein Vielfaches von 5 ist (min. 5)
-    const interval = Math.max(5, Math.ceil((groupingThresholdMinutes || 15) / 5) * 5);
+    // Aggregations-Intervall: Zwingend ein Vielfaches von 5 Minuten (min. 5)
+    // Wenn der User 10 min wählt, bleibt es 10. Wenn er 13 wählt, wird es 15.
+    const interval = Math.max(5, Math.ceil((groupingThresholdMinutes || 5) / 5) * 5);
     const slotDurationMs = interval * 60 * 1000;
     const slots = new Map<number, Map<string, { appName: string, exePath: string, subEvents: ActivitySubEvent[] }>>();
 
     for (const log of logs) {
+      // Datum parsen (UTC zu Lokal Fix)
       const logTime = new Date(log.created_at.replace(" ", "T") + "Z");
-      // Slot berechnen: Abgerundet auf das Vielfache von slotDurationMs
+
+      // STRIKTES BUCKETING: Alles in diesem 5/10/15 Min Fenster landet im selben Start-Timestamp
       const slotTimestamp = Math.floor(logTime.getTime() / slotDurationMs) * slotDurationMs;
 
       const appName = getAppNameFromPath(log.exe_path, log.title);
@@ -242,19 +245,21 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
       const appsInSlot = slots.get(slotTime)!;
       const slotStart = new Date(slotTime);
       const slotEnd = new Date(slotTime + slotDurationMs);
-      const appArray = Array.from(appsInSlot.entries());
-      const totalInSlot = appArray.length;
 
-      // Für die Anzeige im Kalender nutzen wir eine "visuelle" Dauer, 
-      // aber alle Karten eines Slots starten zum gleichen Zeitpunkt.
+      // Apps alphabetisch sortieren für STABILEN RANK (horizontale Verteilung)
+      const sortedAppNames = Array.from(appsInSlot.keys()).sort();
+      const totalInSlot = sortedAppNames.length;
+
       for (let i = 0; i < totalInSlot; i++) {
-        const [appName, data] = appArray[i];
+        const appName = sortedAppNames[i];
+        const data = appsInSlot.get(appName)!;
         const config = await getAppConfig(appName);
+
         allEvents.push({
           id: `slot-${slotTime}-${appName}`,
           title: appName,
           start: slotStart,
-          end: slotEnd, // Die Karte füllt den ganzen Slot visuell
+          end: slotEnd,
           display: 'block',
           backgroundColor: config.color,
           extendedProps: {
@@ -265,7 +270,7 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
             appColor: config.color,
             appIcon: config.icon,
             subEvents: data.subEvents,
-            isEditMode: editMode,
+            isInputMode: editMode, // Konsistent mit App.tsx
             realStart: slotStart,
             realEnd: slotEnd,
             slotRank: i,

@@ -107,9 +107,25 @@ export const Dashboard: React.FC<Props> = ({ db, projects }) => {
                                 <button className="btn-secondary" onClick={() => setRangeDays(30)}>30 Tage</button>
                             </div>
                             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                <input type="date" className="input-text" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                                <label htmlFor="dashboard-start-date" className="sr-only" style={{ display: 'none' }}>Von</label>
+                                <input
+                                    id="dashboard-start-date"
+                                    name="dashboard-start-date"
+                                    type="date"
+                                    className="input-text"
+                                    value={startDate}
+                                    onChange={e => setStartDate(e.target.value)}
+                                />
                                 <span style={{ color: '#94a3b8' }}>bis</span>
-                                <input type="date" className="input-text" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                                <label htmlFor="dashboard-end-date" className="sr-only" style={{ display: 'none' }}>Bis</label>
+                                <input
+                                    id="dashboard-end-date"
+                                    name="dashboard-end-date"
+                                    type="date"
+                                    className="input-text"
+                                    value={endDate}
+                                    onChange={e => setEndDate(e.target.value)}
+                                />
                             </div>
                         </div>
 
