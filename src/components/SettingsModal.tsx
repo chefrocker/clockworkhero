@@ -10,7 +10,9 @@ import { triggerUpdateCheck } from './UpdateChecker';
 import { AppSettings, Project, DaySchedule } from '../types';
 import { AppIcon } from './AppIcon';
 import { getCroppedImg } from '../utils/imageUtils';
-import { getKnownApps, saveAppConfig, backupDatabase, restoreDatabase, saveSetting, exportAllLogsToExcel } from '../services/db';
+import { getKnownApps, saveAppConfig, saveSetting, exportAllLogsToExcel } from '../services/db';
+import { backupDatabase, restoreDatabase } from '../services/exportService';
+import { toast } from './Toast';
 
 // Import Sub-Components
 import { GeneralTab } from './settings/GeneralTab';
@@ -79,10 +81,13 @@ export const SettingsModal: React.FC<Props> = ({
 
     const [activeTab, setActiveTab] = useState<'general' | 'tracking' | 'projects' | 'colors' | 'database' | 'about'>('general');
     const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
-    const [appVersion,    setAppVersion]    = useState<string>('…');
-    const [updateStatus,  setUpdateStatus]  = useState<'idle' | 'checking' | 'uptodate' | 'available'>('idle');
-    const [updateVersion, setUpdateVersion] = useState<string>('');
-    const [confirmQuit,   setConfirmQuit]   = useState(false);
+    const [appVersion,           setAppVersion]           = useState<string>('…');
+    const [updateStatus,         setUpdateStatus]         = useState<'idle' | 'checking' | 'uptodate' | 'available'>('idle');
+    const [updateVersion,        setUpdateVersion]        = useState<string>('');
+    const [confirmQuit,          setConfirmQuit]          = useState(false);
+    const [confirmReset,         setConfirmReset]         = useState(false);
+    const [confirmRemovePass,    setConfirmRemovePass]    = useState(false);
+    const [confirmRestore,       setConfirmRestore]       = useState(false);
 
     useEffect(() => {
         getVersion().then(setAppVersion).catch(() => setAppVersion('?'));
@@ -182,7 +187,7 @@ export const SettingsModal: React.FC<Props> = ({
             }
         } catch (e) {
             console.error("Fehler beim Icon-Update:", e);
-            alert("Fehler beim Laden des Bildes.");
+            toast.error("Fehler beim Laden des Bildes.");
         }
     };
 
@@ -215,11 +220,8 @@ export const SettingsModal: React.FC<Props> = ({
                         }
                     }
                 } else {
-                    // Hier müssten wir den State an ProjectsTab weitergeben, das ist komplexer.
-                    // Vereinfachung: Wir speichern es temporär im LocalStorage oder nutzen einen Context.
-                    // Da wir hier refactorn, lassen wir das "Neue Projekt Icon" Feature kurz außen vor oder lösen es anders.
-                    // Für jetzt: Alert.
-                    alert("Bitte erstelle das Projekt zuerst, dann klicke auf das Icon zum Bearbeiten.");
+                    // Kein Projekt oder App selektiert → Cropper-Bild verwerfen
+                    toast.warning("Kein Ziel ausgewählt", "Klicke zuerst auf ein Projekt-Icon oder wähle beim Erstellen das Bild-Icon.");
                 }
                 setCropImageSrc(null);
                 setZoom(1);
@@ -237,18 +239,54 @@ export const SettingsModal: React.FC<Props> = ({
     };
 
     const handleDbUnlock = () => {
-        if (dbPasswordInput === settings.adminPassword) { setIsDbUnlocked(true); setDbPasswordInput(""); } else { alert("Falsches Passwort!"); }
+        if (dbPasswordInput === settings.adminPassword) {
+            setIsDbUnlocked(true);
+            setDbPasswordInput("");
+        } else {
+            toast.error("Falsches Passwort", "Bitte versuche es erneut.");
+        }
     };
     const handleSetPassword = async () => {
         if (!newPassword || !db) return;
         await saveSetting(db, 'adminPassword', newPassword);
-        setHasPassword(true); onSaveSettings({ ...localSettings, adminPassword: newPassword }); alert("Passwortschutz aktiviert!"); setNewPassword("");
+        setHasPassword(true);
+        onSaveSettings({ ...localSettings, adminPassword: newPassword });
+        toast.success("Passwortschutz aktiviert");
+        setNewPassword("");
     };
     const handleRemovePassword = async () => {
-        if (window.confirm("Passwortschutz wirklich entfernen?") && db) {
-            await saveSetting(db, 'adminPassword', "");
-            setHasPassword(false); setIsDbUnlocked(true); onSaveSettings({ ...localSettings, adminPassword: "" });
+        if (!confirmRemovePass) {
+            setConfirmRemovePass(true);
+            setTimeout(() => setConfirmRemovePass(false), 4000);
+            return;
         }
+        if (db) {
+            await saveSetting(db, 'adminPassword', "");
+            setHasPassword(false);
+            setIsDbUnlocked(true);
+            onSaveSettings({ ...localSettings, adminPassword: "" });
+            toast.success("Passwortschutz entfernt");
+            setConfirmRemovePass(false);
+        }
+    };
+
+    const handleRestoreDatabase = async () => {
+        if (!confirmRestore) {
+            setConfirmRestore(true);
+            setTimeout(() => setConfirmRestore(false), 5000);
+            return;
+        }
+        setConfirmRestore(false);
+        await restoreDatabase();
+    };
+
+    const handleResetData = () => {
+        if (!confirmReset) {
+            setConfirmReset(true);
+            setTimeout(() => setConfirmReset(false), 4000);
+            return;
+        }
+        onResetData();
     };
 
     if (!isOpen) return null;
@@ -417,7 +455,18 @@ export const SettingsModal: React.FC<Props> = ({
                                             {hasPassword ? (
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                                     <span style={{ color: '#047857' }}>Passwortschutz ist aktiv.</span>
-                                                    <button className="btn-secondary" onClick={handleRemovePassword} style={{ borderColor: '#ef4444', color: '#ef4444' }}>Schutz entfernen</button>
+                                                    <button
+                                                        className="btn-secondary"
+                                                        onClick={handleRemovePassword}
+                                                        style={{
+                                                            borderColor: '#ef4444',
+                                                            color: confirmRemovePass ? 'white' : '#ef4444',
+                                                            background: confirmRemovePass ? '#ef4444' : undefined,
+                                                            transition: 'all 0.2s',
+                                                        }}
+                                                    >
+                                                        {confirmRemovePass ? 'Wirklich entfernen?' : 'Schutz entfernen'}
+                                                    </button>
                                                 </div>
                                             ) : (
                                                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -444,7 +493,19 @@ export const SettingsModal: React.FC<Props> = ({
                                             <div className="dashboard-card" style={{ alignItems: 'flex-start', background: 'var(--bg-color)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><FaUndo size={24} color="#f59e0b" /><span style={{ fontWeight: 'bold', color: 'var(--text-color)' }}>Wiederherstellen</span></div>
                                                 <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '15px' }}>Lade ein Backup. ACHTUNG: Überschreibt alles!</p>
-                                                <button className="btn-secondary" onClick={restoreDatabase} style={{ width: '100%' }}>Backup laden</button>
+                                                <button
+                                                    className="btn-secondary"
+                                                    onClick={handleRestoreDatabase}
+                                                    style={{
+                                                        width: '100%',
+                                                        borderColor: confirmRestore ? '#f59e0b' : undefined,
+                                                        color: confirmRestore ? 'white' : undefined,
+                                                        background: confirmRestore ? '#f59e0b' : undefined,
+                                                        transition: 'all 0.2s',
+                                                    }}
+                                                >
+                                                    {confirmRestore ? 'Wirklich überschreiben?' : 'Backup laden'}
+                                                </button>
                                             </div>
                                             <div className="dashboard-card" style={{ alignItems: 'flex-start', background: 'var(--bg-color)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><FaFileExcel size={24} color="#10b981" /><span style={{ fontWeight: 'bold', color: 'var(--text-color)' }}>Log Export</span></div>
@@ -455,7 +516,19 @@ export const SettingsModal: React.FC<Props> = ({
                                         <h3 className="settings-h3" style={{ color: '#ef4444' }}>Gefahrenzone</h3>
                                         <div style={{ border: '1px solid rgba(239, 68, 68, 0.3)', background: 'rgba(239, 68, 68, 0.1)', padding: '20px', borderRadius: '8px' }}>
                                             <p className="settings-desc" style={{ color: '#b91c1c' }}>Löscht alle Logs, Zeiten und Einstellungen unwiderruflich.</p>
-                                            <button onClick={() => { if (window.confirm("Wirklich ALLES löschen?")) onResetData(); }} style={{ width: '100%', padding: '15px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}><FaTrash /> Datenbank zurücksetzen</button>
+                                            <button
+                                                onClick={handleResetData}
+                                                style={{
+                                                    width: '100%', padding: '15px',
+                                                    background: confirmReset ? '#b91c1c' : '#ef4444',
+                                                    color: 'white', border: 'none', borderRadius: '6px',
+                                                    fontWeight: 'bold', cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    outline: confirmReset ? '2px solid #fca5a5' : 'none',
+                                                }}
+                                            >
+                                                <FaTrash /> {confirmReset ? 'Wirklich ALLES löschen? Nochmal klicken!' : 'Datenbank zurücksetzen'}
+                                            </button>
                                         </div>
                                     </div>
                                 )}
