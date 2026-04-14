@@ -13,7 +13,7 @@ import {
   resetDatabase, updateProject
 } from './services/db';
 
-import { CalendarEngine } from './components/CalendarEngine';
+import { CalendarEngine, CalendarHandle } from './components/CalendarEngine';
 import { SessionModal } from './components/SessionModal';
 import { ActivityDetailModal } from './components/ActivityDetailModal';
 import { SettingsModal } from './components/SettingsModal';
@@ -61,7 +61,8 @@ function App() {
     isRunning: false, startTime: null, projectId: "", description: ""
   });
   const [timerDisplay, setTimerDisplay] = useState("00:00:00");
-  const lastSavedTitle = useRef<string>("");
+  const lastSavedTitle    = useRef<string>("");
+  const calendarEngineRef = useRef<CalendarHandle>(null);
 
   // ScrollTime State (Startet bei aktueller Stunde)
   const [initialScrollTime, setInitialScrollTime] = useState("08:00:00");
@@ -144,6 +145,73 @@ function App() {
 
     return () => clearInterval(interval);
   }, [db, isEditMode, viewMode, settings]);
+
+  // ── Keyboard Shortcuts ────────────────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Shortcuts deaktivieren wenn Nutzer in einem Eingabefeld tippt
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      // Modals offen → nur Esc behandeln
+      const modalOpen = showSessionModal || showActivityModal || showSettings;
+
+      switch (e.key) {
+        case 'Escape':
+          if (showSessionModal)  { setShowSessionModal(false);  e.preventDefault(); }
+          if (showActivityModal) { setShowActivityModal(false); e.preventDefault(); }
+          if (showSettings)      { setShowSettings(false);      e.preventDefault(); }
+          break;
+
+        // Navigation (nur wenn kein Modal offen)
+        case 'ArrowLeft':
+          if (!modalOpen && viewMode !== 'dashboard') { calendarEngineRef.current?.prev(); e.preventDefault(); }
+          break;
+        case 'ArrowRight':
+          if (!modalOpen && viewMode !== 'dashboard') { calendarEngineRef.current?.next(); e.preventDefault(); }
+          break;
+        case 'h': case 'H':
+          if (!modalOpen && viewMode !== 'dashboard') { calendarEngineRef.current?.today(); e.preventDefault(); }
+          break;
+
+        // Ansicht wechseln (nur wenn kein Modal offen)
+        case 'd': case 'D':
+          if (!modalOpen) { setViewMode('day');       e.preventDefault(); }
+          break;
+        case 'w': case 'W':
+          if (!modalOpen) { setViewMode('week');      e.preventDefault(); }
+          break;
+        case 'a': case 'A':
+          if (!modalOpen) { setViewMode('dashboard'); e.preventDefault(); }
+          break;
+
+        // Neue Session
+        case 'n': case 'N':
+          if (!modalOpen) {
+            const now = new Date();
+            const end = new Date(now.getTime() + 60 * 60 * 1000);
+            setSelection({ start: now, end });
+            setEditingSessionId(undefined);
+            setEditingSessionData(null);
+            setShowSessionModal(true);
+            e.preventDefault();
+          }
+          break;
+
+        // Modus togglen
+        case 'm': case 'M':
+          if (!modalOpen && viewMode !== 'dashboard') { setIsEditMode(v => !v); e.preventDefault(); }
+          break;
+
+        // Einstellungen
+        case ',':
+          if (e.metaKey || e.ctrlKey) { setShowSettings(true); e.preventDefault(); }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showSessionModal, showActivityModal, showSettings, viewMode]);
 
   // Refresh bei Modus-Wechsel
   useEffect(() => {
@@ -477,6 +545,7 @@ function App() {
           <Dashboard db={db} projects={projects} />
         ) : (
           <CalendarEngine
+            ref={calendarEngineRef}
             events={calendarEvents}
             isEditMode={isEditMode}
             viewMode={viewMode}

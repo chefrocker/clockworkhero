@@ -68,10 +68,17 @@ export async function initDatabase(): Promise<Database> {
   await db.execute(`CREATE TABLE IF NOT EXISTS work_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, description TEXT, start_time DATETIME, end_time DATETIME)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
 
-  try { await db.execute("ALTER TABLE logs ADD COLUMN exe_path TEXT"); } catch (e) { }
-  try { await db.execute("ALTER TABLE projects ADD COLUMN icon TEXT"); } catch (e) { }
-  try { await db.execute("ALTER TABLE projects ADD COLUMN icon_type TEXT"); } catch (e) { }
-  try { await db.execute("ALTER TABLE app_colors ADD COLUMN icon TEXT"); } catch (e) { }
+  // Schema-Migrationen (silent – Spalte existiert bereits → kein Fehler)
+  try { await db.execute("ALTER TABLE logs ADD COLUMN exe_path TEXT"); } catch (_) { }
+  try { await db.execute("ALTER TABLE projects ADD COLUMN icon TEXT"); } catch (_) { }
+  try { await db.execute("ALTER TABLE projects ADD COLUMN icon_type TEXT"); } catch (_) { }
+  try { await db.execute("ALTER TABLE app_colors ADD COLUMN icon TEXT"); } catch (_) { }
+
+  // Performance-Indexes (IF NOT EXISTS → idempotent)
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_logs_created_at      ON logs(created_at)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_sessions_start        ON work_sessions(start_time)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_sessions_end          ON work_sessions(end_time)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_sessions_project      ON work_sessions(project_id)`);
 
   return db;
 }

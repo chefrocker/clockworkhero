@@ -1,6 +1,14 @@
 import React, {
-    useRef, useEffect, useState, useLayoutEffect, useMemo, useCallback
+    useRef, useEffect, useState, useLayoutEffect, useMemo, useCallback,
+    forwardRef, useImperativeHandle
 } from 'react';
+
+// Öffentliche Methoden die App.tsx per ref aufrufen kann
+export interface CalendarHandle {
+    prev:  () => void;
+    next:  () => void;
+    today: () => void;
+}
 import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -88,15 +96,22 @@ const processEventsForOverlaps = (rawEvents: any[]): any[] => {
 };
 
 // ─── Komponente ──────────────────────────────────────────────────────────────
-export const CalendarEngine: React.FC<Props> = ({
+export const CalendarEngine = forwardRef<CalendarHandle, Props>(({
     events, isEditMode, viewMode,
     onDateSelect, onEventClick, onDeleteSession, onEventDrop, onEventResize,
     workStart, workEnd, scrollTime, hiddenDays, weekSchedule,
-}) => {
+}, ref) => {
     const calendarRef  = useRef<FullCalendar>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     // Wrapper-Div für FullCalendar + ActivityOverlay (position: relative)
     const fcWrapperRef = useRef<HTMLDivElement>(null);
+
+    // Methoden für App.tsx (Keyboard Shortcuts)
+    useImperativeHandle(ref, () => ({
+        prev:  () => calendarRef.current?.getApi().prev(),
+        next:  () => calendarRef.current?.getApi().next(),
+        today: () => calendarRef.current?.getApi().today(),
+    }));
 
     const [slotHeight,     setSlotHeight]     = useState(60);
     const [colWidth,       setColWidth]       = useState(200);
@@ -378,8 +393,28 @@ export const CalendarEngine: React.FC<Props> = ({
                     </div>
                 </div>
 
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    Zoom: {Math.round((slotHeight / 60) * 100)}% &nbsp;(Ctrl + Mausrad)
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                        Zoom: {Math.round((slotHeight / 60) * 100)}%&thinsp;(Ctrl+Rad)
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', display: 'flex', gap: '8px', opacity: 0.7 }}>
+                        {[
+                            ['←→', 'Navigieren'],
+                            ['H', 'Heute'],
+                            ['D/W', 'Tag/Woche'],
+                            ['N', 'Neue Session'],
+                            ['M', 'Modus'],
+                        ].map(([key, label]) => (
+                            <span key={key} title={label} style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                <kbd style={{
+                                    background: 'var(--bg-color)', border: '1px solid var(--border-color)',
+                                    borderRadius: '3px', padding: '0 4px', fontFamily: 'monospace',
+                                    fontSize: '0.7rem', lineHeight: '16px',
+                                }}>{key}</kbd>
+                                <span style={{ fontSize: '0.68rem' }}>{label}</span>
+                            </span>
+                        ))}
+                    </div>
                 </div>
             </div>
 
@@ -462,7 +497,9 @@ export const CalendarEngine: React.FC<Props> = ({
             </div>
         </div>
     );
-};
+});
+
+CalendarEngine.displayName = 'CalendarEngine';
 
 const navBtnStyle: React.CSSProperties = {
     background:     'var(--panel-bg)',
