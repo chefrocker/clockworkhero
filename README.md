@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src-tauri/icons/128x128.png" width="96" alt="ClockworkHero Icon" />
+</p>
+
 # ClockworkHero
 
 > Automatische Zeiterfassung für Windows — sieh auf einen Blick, wann du was gemacht hast.
