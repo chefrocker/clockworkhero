@@ -51,9 +51,10 @@ interface Props {
     workStart:       string;
     workEnd:         string;
     scrollTime:      string;
-    hiddenDays?:     number[];
-    weekSchedule?:   DaySchedule[];
-    onRangeChange?:  (start: Date, end: Date) => void;
+    hiddenDays?:       number[];
+    weekSchedule?:     DaySchedule[];
+    onRangeChange?:    (start: Date, end: Date) => void;
+    firstDayOfWeek?:   0 | 1 | 6;
 }
 
 // ─── Zeitraumbasierter Overlap-Algorithmus ────────────────────────────────────
@@ -100,7 +101,7 @@ const processEventsForOverlaps = (rawEvents: any[]): any[] => {
 export const CalendarEngine = forwardRef<CalendarHandle, Props>(({
     events, isEditMode, viewMode,
     onDateSelect, onEventClick, onDeleteSession, onEventDrop, onEventResize,
-    workStart, workEnd, scrollTime, hiddenDays, weekSchedule, onRangeChange,
+    workStart, workEnd, scrollTime, hiddenDays, weekSchedule, onRangeChange, firstDayOfWeek,
 }, ref) => {
     const calendarRef  = useRef<FullCalendar>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -454,6 +455,7 @@ export const CalendarEngine = forwardRef<CalendarHandle, Props>(({
                     slotEventOverlap={true}
 
                     hiddenDays={hiddenDays ?? []}
+                    firstDay={firstDayOfWeek ?? 1}
                     businessHours={businessHours}
 
                     height="100%"

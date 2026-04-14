@@ -5,9 +5,26 @@ import { DaySchedule, WorkTimeBlock } from '../types';
 interface Props {
   weekSchedule: DaySchedule[];
   onChange: (schedule: DaySchedule[]) => void;
+  /** 0=Sonntag · 1=Montag (Standard) · 6=Samstag */
+  firstDayOfWeek?: 0 | 1 | 6;
 }
 
-export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) => {
+// weekSchedule-Array ist immer Mo=0 … So=6
+// firstDayOfWeek gibt an, welcher Tag im Kalender zuerst erscheint.
+// Mapping FC-Index → weekSchedule-Index: FC 0=So→6, 1=Mo→0, 2=Di→1 … 6=Sa→5
+const FC_TO_WS: Record<number, number> = { 0: 6, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5 };
+
+function getDisplayOrder(firstDay: 0 | 1 | 6): number[] {
+  // FC-Reihenfolge: 0=So,1=Mo,2=Di,3=Mi,4=Do,5=Fr,6=Sa
+  const all = [0, 1, 2, 3, 4, 5, 6];
+  const start = all.indexOf(firstDay);
+  const fcOrder = [...all.slice(start), ...all.slice(0, start)];
+  // In weekSchedule-Indizes übersetzen
+  return fcOrder.map(fc => FC_TO_WS[fc]);
+}
+
+export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange, firstDayOfWeek = 1 }) => {
+  const displayOrder = getDisplayOrder(firstDayOfWeek);
 
   const addBlock = (dayIndex: number) => {
     const updated = [...weekSchedule];
@@ -83,10 +100,10 @@ export const WorkScheduleEditor: React.FC<Props> = ({ weekSchedule, onChange }) 
         </div>
       </div>
 
-      {weekSchedule.map((day, dayIdx) => (
+      {displayOrder.map(dayIdx => (
         <DayCard
-          key={day.dayName}
-          day={day}
+          key={weekSchedule[dayIdx].dayName}
+          day={weekSchedule[dayIdx]}
           dayIndex={dayIdx}
           onToggleWorkday={toggleWorkday}
           onAddBlock={addBlock}

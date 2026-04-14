@@ -58,6 +58,7 @@ export interface AppSettings {
     hiddenDays?: number[];
     autoGrouping?: boolean;
     autostart?: boolean;
+    firstDayOfWeek?: 0 | 1 | 6;  // 0 = Sonntag, 1 = Montag (Standard), 6 = Samstag
 }
 
 export interface ActivitySubEvent {

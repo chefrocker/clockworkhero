@@ -291,6 +291,7 @@ function App() {
             scrollTime={initialScrollTime}
             hiddenDays={settings.hiddenDays}
             weekSchedule={settings.weekSchedule}
+            firstDayOfWeek={settings.firstDayOfWeek ?? 1}
           />
         )}
       </div>

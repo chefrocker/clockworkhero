@@ -101,6 +101,7 @@ export async function loadSettings(db: Database): Promise<AppSettings> {
     if (row.key === 'autostart') settings.autostart = row.value === 'true';
     if (row.key === 'adminPassword') settings.adminPassword = row.value;
     if (row.key === 'weekSchedule') { try { settings.weekSchedule = JSON.parse(row.value); } catch (e) { } }
+    if (row.key === 'firstDayOfWeek') settings.firstDayOfWeek = parseInt(row.value) as 0 | 1 | 6;
   });
   return settings;
 }
@@ -118,6 +119,7 @@ export async function saveSettings(db: Database, settings: AppSettings) {
   await saveSetting(db, 'autostart', (settings.autostart ?? false).toString());
   if (settings.adminPassword !== undefined) await saveSetting(db, 'adminPassword', settings.adminPassword);
   if (settings.weekSchedule) await saveSetting(db, 'weekSchedule', JSON.stringify(settings.weekSchedule));
+  if (settings.firstDayOfWeek !== undefined) await saveSetting(db, 'firstDayOfWeek', settings.firstDayOfWeek.toString());
 }
 
 // --- DATA MANAGEMENT ---

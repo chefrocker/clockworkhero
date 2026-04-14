@@ -50,9 +50,13 @@ export const UpdateChecker: React.FC<Props> = ({ checkOnMount = true }) => {
                     body: update.body,
                     update,
                 });
+            } else {
+                // Kein Update verfügbar – bleibt idle (keine Anzeige)
+                console.debug('UpdateChecker: Kein Update verfügbar.');
             }
         } catch (e) {
-            // Kein Netzwerk oder kein Update-Server → still ignorieren
+            // Kein Netzwerk, Server nicht erreichbar, oder Signatur-Problem
+            // Nur in der Dev-Console loggen, kein Toast für den Nutzer
             console.debug('Update-Check fehlgeschlagen:', e);
         }
     };
