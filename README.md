@@ -4,9 +4,9 @@
 
 **Tauri 2 · React 19 · TypeScript · SQLite**
 
-[![Release](https://img.shields.io/github/v/release/DEIN-USER/ClockworkHero?style=flat-square)](https://github.com/DEIN-USER/ClockworkHero/releases/latest)
+[![Release](https://img.shields.io/github/v/release/chefrocker/ClockworkHero?style=flat-square)](https://github.com/chefrocker/ClockworkHero/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Build](https://img.shields.io/github/actions/workflow/status/DEIN-USER/ClockworkHero/release.yml?style=flat-square)](https://github.com/DEIN-USER/ClockworkHero/actions)
+[![Build](https://img.shields.io/github/actions/workflow/status/chefrocker/ClockworkHero/release.yml?style=flat-square)](https://github.com/chefrocker/ClockworkHero/actions)
 
 ---
 
@@ -34,7 +34,7 @@ ClockworkHero läuft im Hintergrund im System-Tray und protokolliert automatisch
 
 ## Download
 
-→ **[Neueste Version herunterladen](https://github.com/DEIN-USER/ClockworkHero/releases/latest)**
+→ **[Neueste Version herunterladen](https://github.com/chefrocker/ClockworkHero/releases/latest)**
 
 Installer für Windows x64 (`.exe` oder `.msi`).  
 Das Programm aktualisiert sich danach selbst, wenn neue Versionen erscheinen.
@@ -52,7 +52,7 @@ Das Programm aktualisiert sich danach selbst, wenn neue Versionen erscheinen.
 ### Setup
 
 ```bash
-git clone https://github.com/DEIN-USER/ClockworkHero.git
+git clone https://github.com/chefrocker/ClockworkHero.git
 cd ClockworkHero
 npm install
 ```
