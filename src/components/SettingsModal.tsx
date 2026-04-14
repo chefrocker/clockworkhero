@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Cropper from 'react-easy-crop';
 import Database from '@tauri-apps/plugin-sql';
+import { getVersion } from '@tauri-apps/api/app';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { FaCog, FaSave, FaClock, FaPalette, FaDatabase, FaBriefcase, FaCheck, FaTimes, FaLock, FaUnlock, FaHdd, FaKey, FaUndo, FaInfoCircle, FaSun, FaMoon, FaFileExcel, FaTrash } from 'react-icons/fa';
@@ -76,6 +77,11 @@ export const SettingsModal: React.FC<Props> = ({
 
     const [activeTab, setActiveTab] = useState<'general' | 'tracking' | 'projects' | 'colors' | 'database' | 'about'>('general');
     const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
+    const [appVersion, setAppVersion] = useState<string>('…');
+
+    useEffect(() => {
+        getVersion().then(setAppVersion).catch(() => setAppVersion('?'));
+    }, []);
 
     // State für Image Cropper
     const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
@@ -433,10 +439,10 @@ export const SettingsModal: React.FC<Props> = ({
                         {activeTab === 'about' && (
                             <div style={{ textAlign: 'center', padding: '40px' }}>
                                 <h2 style={{ color: 'var(--text-color)', marginBottom: '10px' }}>ClockworkHero</h2>
-                                <div style={{ fontSize: '1.2rem', color: 'var(--text-secondary)', marginBottom: '30px' }}>Version 0.9.5</div>
+                                <div style={{ fontSize: '1.2rem', color: 'var(--text-secondary)', marginBottom: '30px' }}>Version {appVersion}</div>
                                 <div style={{ background: 'var(--bg-color)', padding: '30px', borderRadius: '12px', border: '1px solid var(--border-color)', maxWidth: '600px', margin: '0 auto', textAlign: 'left' }}>
                                     <h4 style={{ marginTop: 0, color: 'var(--text-color)' }}>MIT License</h4>
-                                    <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>Copyright (c) 2025 Sandro Ballarini</p>
+                                    <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>Copyright (c) 2026 Sandro Ballarini</p>
                                 </div>
                             </div>
                         )}

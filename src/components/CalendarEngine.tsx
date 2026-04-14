@@ -53,6 +53,7 @@ interface Props {
     scrollTime:      string;
     hiddenDays?:     number[];
     weekSchedule?:   DaySchedule[];
+    onRangeChange?:  (start: Date, end: Date) => void;
 }
 
 // ─── Zeitraumbasierter Overlap-Algorithmus ────────────────────────────────────
@@ -99,7 +100,7 @@ const processEventsForOverlaps = (rawEvents: any[]): any[] => {
 export const CalendarEngine = forwardRef<CalendarHandle, Props>(({
     events, isEditMode, viewMode,
     onDateSelect, onEventClick, onDeleteSession, onEventDrop, onEventResize,
-    workStart, workEnd, scrollTime, hiddenDays, weekSchedule,
+    workStart, workEnd, scrollTime, hiddenDays, weekSchedule, onRangeChange,
 }, ref) => {
     const calendarRef  = useRef<FullCalendar>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -464,6 +465,8 @@ export const CalendarEngine = forwardRef<CalendarHandle, Props>(({
                         if (currentViewDate.getTime() !== d.getTime()) {
                             setCurrentViewDate(d);
                         }
+                        // Sichtbaren Datumsbereich nach oben melden (für DB-Filterung)
+                        onRangeChange?.(info.view.activeStart, info.view.activeEnd);
                         // Nach Datums-Wechsel Layout neu messen
                         setTimeout(measureLayout, 80);
                     }}

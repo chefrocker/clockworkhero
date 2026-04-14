@@ -189,8 +189,20 @@ export async function deleteSession(db: Database, id: string) {
   const realId = id.replace('manual-', ''); await db.execute("DELETE FROM work_sessions WHERE id = $1", [realId]);
 }
 
+// ─── Hilfsfunktion: Date → SQLite-Format ─────────────────────────────────────
+function toSqlite(d: Date): string {
+  return d.toISOString().replace('T', ' ').slice(0, 19);
+}
+
 // --- LOAD ALL EVENTS ---
-export async function loadAllEvents(db: Database, editMode: boolean, groupingThresholdMinutes: number): Promise<any[]> {
+export interface DateRange { start: Date; end: Date; }
+
+export async function loadAllEvents(
+  db: Database,
+  editMode: boolean,
+  groupingThresholdMinutes: number,
+  dateRange?: DateRange
+): Promise<any[]> {
   const allEvents = [];
 
   const appConfigCache = new Map<string, { color: string, icon?: string }>();
@@ -205,8 +217,13 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
     return config;
   }
 
-
-  const logs = await db.select<LogEntry[]>("SELECT * FROM logs ORDER BY created_at ASC LIMIT 15000");
+  // ── Logs mit optionalem Datumsfilter laden ────────────────────────────────
+  const logs: LogEntry[] = dateRange
+    ? await db.select<LogEntry[]>(
+        "SELECT * FROM logs WHERE created_at >= $1 AND created_at < $2 ORDER BY created_at ASC LIMIT 5000",
+        [toSqlite(dateRange.start), toSqlite(dateRange.end)]
+      )
+    : await db.select<LogEntry[]>("SELECT * FROM logs ORDER BY created_at ASC LIMIT 5000");
   if (logs.length > 0) {
     // Aggregations-Intervall: Zwingend ein Vielfaches von 5 Minuten (min. 5)
     // Wenn der User 10 min wählt, bleibt es 10. Wenn er 13 wählt, wird es 15.
@@ -288,7 +305,13 @@ export async function loadAllEvents(db: Database, editMode: boolean, groupingThr
     }
   }
 
-  const sessions = await db.select<WorkSession[]>("SELECT * FROM work_sessions");
+  // ── Sessions mit optionalem Datumsfilter laden ───────────────────────────
+  const sessions: WorkSession[] = dateRange
+    ? await db.select<WorkSession[]>(
+        "SELECT * FROM work_sessions WHERE start_time < $1 AND end_time > $2",
+        [toSqlite(dateRange.end), toSqlite(dateRange.start)]
+      )
+    : await db.select<WorkSession[]>("SELECT * FROM work_sessions");
   const projects = await loadProjects(db);
   for (const session of sessions) {
     const project = projects.find(p => p.id === session.project_id);
