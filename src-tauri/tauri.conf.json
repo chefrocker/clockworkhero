@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "clockworkhero",
-        "width": 800,
-        "height": 600
+        "title": "ClockworkHero",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600
       }
     ],
     "security": {
@@ -30,6 +32,22 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "wix": {},
+      "nsis": {}
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg2QkNCN0ExNzY3MUE1RDUKUldUVnBYRjJvYmU4aG1rMzR0amdWQWlWVStIRFBwNkZGVmJJOHY4cjJESEowUDRJeFNRYkVubUEK",
+      "endpoints": [
+        "https://github.com/DEIN-GITHUB-USER/ClockworkHero/releases/latest/download/latest.json"
+      ],
+      "dialog": false,
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

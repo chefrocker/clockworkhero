@@ -1,38 +1,60 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
+# ─── Node / Frontend ─────────────────────────────────────────────────────────
+node_modules/
+dist/
+dist-ssr/
 *.local
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
+# ─── Tauri / Rust Build-Artefakte ────────────────────────────────────────────
+src-tauri/target/
+src-tauri/WixTools/
+src-tauri/gen/
+.tauri/
+
+# ─── Umgebungsvariablen ───────────────────────────────────────────────────────
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ─── Editoren ─────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-# Datenbanken ignorieren
-*.db
-*.db-shm
-*.db-wal
-tracker.db
+*.swp
 
-# Logs und Systemdateien
+# ─── Betriebssystem ───────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
 logs/
 *.log
-node_modules/
-target/
-dist/
-src-tauri/target/
-*.BAK
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ─── Cache ────────────────────────────────────────────────────────────────────
+.vite/
+.eslintcache
+*.tsbuildinfo
+
+# ─── Test & Coverage ──────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ─── Backups ──────────────────────────────────────────────────────────────────
+*.bak
+*.orig
+
+# ─── Interne Dokumentation (nicht für Gitlab) ────────────────────────────────
+# Enthält interne Problemanalysen und Handlungsempfehlungen
+docs/02_visuelle_probleme_und_handlungsempfehlungen.md

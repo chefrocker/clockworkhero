@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import Database from '@tauri-apps/plugin-sql';
-import { FaPen, FaCalendarDay, FaCalendarWeek, FaCog, FaChartPie, FaPlay, FaStop } from 'react-icons/fa';
+import { FaCalendarDay, FaCalendarWeek, FaCog, FaChartPie, FaPlay, FaStop, FaEye, FaPencilAlt } from 'react-icons/fa';
 import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart';
+import { invoke } from '@tauri-apps/api/core';
+import { UpdateChecker } from './components/UpdateChecker';
 
 import {
   initDatabase, logActiveWindow, loadAllEvents, loadProjects,
@@ -163,6 +165,25 @@ function App() {
     const projs = await loadProjects(database);
     setCalendarEvents(events);
     setProjects(projs);
+
+    // Tray-Tooltip mit heutigen gebuchten Stunden aktualisieren
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(today);
+      todayEnd.setHours(23, 59, 59, 999);
+      const manualEvents = events.filter(e =>
+        e.extendedProps?.type === 'manual' &&
+        new Date(e.start) >= today &&
+        new Date(e.start) <= todayEnd
+      );
+      const todayHours = manualEvents.reduce((sum: number, e: any) => {
+        if (!e.start || !e.end) return sum;
+        return sum + (new Date(e.end).getTime() - new Date(e.start).getTime()) / 3600000;
+      }, 0);
+      const tooltipText = `ClockworkHero • Heute: ${todayHours.toFixed(1)}h`;
+      invoke('update_tray_tooltip', { text: tooltipText }).catch(() => {});
+    } catch { /* Tray-Update ist optional */ }
   }
 
   const [editingSessionData, setEditingSessionData] = useState<{ projectId: string, description: string } | null>(null);
@@ -348,69 +369,106 @@ function App() {
         db={db}
       />
 
-      <div className="app-header">
-        <div className="header-left">
-          <div className="header-status">
-            <span className={`status-dot ${isEditMode ? 'active' : ''}`}></span>
-            {isEditMode ? 'Modus: Arbeitstasks' : 'Modus: ActivityCards'}
-          </div>
+      {/* ── Update-Benachrichtigung (floating toast) ──────────────────── */}
+      <UpdateChecker />
 
-          <div className="timer-controls">
-            {!timerState.isRunning ? (
-              <>
-                <select
-                  className="header-input"
-                  style={{ width: '150px' }}
-                  value={timerState.projectId}
-                  onChange={e => setTimerState({ ...timerState, projectId: e.target.value })}
-                >
-                  <option value="">Projekt wählen...</option>
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-                <input
-                  className="header-input"
-                  style={{ width: '200px' }}
-                  placeholder="Was machst du gerade?"
-                  value={timerState.description}
-                  onChange={e => setTimerState({ ...timerState, description: e.target.value })}
-                />
-                <button className="btn-save header-input" style={{ padding: '0 16px' }} onClick={startTimer}>
-                  <FaPlay size={10} /> Start
-                </button>
-              </>
-            ) : (
-              <>
-                <span style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                  Läuft: {projects.find(p => p.id.toString() === timerState.projectId)?.name}
-                </span>
-                <div className="timer-display">{timerDisplay}</div>
-                <button className="btn-secondary header-input" style={{ padding: '0 16px', borderColor: '#ef4444', color: '#ef4444' }} onClick={stopTimer}>
-                  <FaStop size={10} /> Stop
-                </button>
-              </>
-            )}
-          </div>
+      <div className="app-header">
+        {/* ── Links: Timer ──────────────────────────────────────────────── */}
+        <div className="header-left">
+          {!timerState.isRunning ? (
+            <div className="timer-idle">
+              <select
+                className="header-input"
+                value={timerState.projectId}
+                onChange={e => setTimerState({ ...timerState, projectId: e.target.value })}
+                aria-label="Projekt für Timer"
+              >
+                <option value="">Projekt wählen…</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <input
+                className="header-input"
+                placeholder="Woran arbeitest du?"
+                value={timerState.description}
+                onChange={e => setTimerState({ ...timerState, description: e.target.value })}
+                aria-label="Beschreibung"
+              />
+              <button
+                className="btn-timer-start"
+                onClick={startTimer}
+                title="Timer starten"
+              >
+                <FaPlay size={10} /> Start
+              </button>
+            </div>
+          ) : (
+            <div className="timer-running">
+              <div className="timer-pulse" />
+              <span className="timer-project">
+                {projects.find(p => p.id.toString() === timerState.projectId)?.name ?? '–'}
+              </span>
+              <div className="timer-display">{timerDisplay}</div>
+              <button
+                className="btn-timer-stop"
+                onClick={stopTimer}
+                title="Timer stoppen und speichern"
+              >
+                <FaStop size={10} /> Stopp
+              </button>
+            </div>
+          )}
         </div>
 
-        <div className="header-controls">
-          <button onClick={() => setShowSettings(true)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '8px' }} title="Einstellungen"><FaCog size={20} /></button>
+        {/* ── Rechts: Navigation + Ansicht + Einstellungen ──────────────── */}
+        <div className="header-right">
 
-          <div style={{ display: 'flex', background: 'var(--panel-bg)', borderRadius: '8px', padding: '2px', marginRight: '10px', border: '1px solid var(--border-color)' }}>
-            <button onClick={() => setViewMode('day')} style={{ background: viewMode === 'day' ? 'var(--bg-color)' : 'transparent', boxShadow: viewMode === 'day' ? 'var(--shadow)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: 'var(--text-color)' }}><FaCalendarDay /> Tag</button>
-            <button onClick={() => setViewMode('week')} style={{ background: viewMode === 'week' ? 'var(--bg-color)' : 'transparent', boxShadow: viewMode === 'week' ? 'var(--shadow)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: 'var(--text-color)' }}><FaCalendarWeek /> Woche</button>
-            <button onClick={() => setViewMode('dashboard')} style={{ background: viewMode === 'dashboard' ? 'var(--bg-color)' : 'transparent', boxShadow: viewMode === 'dashboard' ? 'var(--shadow)' : 'none', padding: '6px 12px', borderRadius: '6px', border: 'none', fontWeight: '600', color: 'var(--text-color)' }}><FaChartPie /> Auswertung</button>
+          {/* View-Switcher */}
+          <div className="view-switcher">
+            <button
+              className={`view-btn ${viewMode === 'day' ? 'active' : ''}`}
+              onClick={() => setViewMode('day')}
+              title="Tagesansicht"
+            >
+              <FaCalendarDay size={13} /> Tag
+            </button>
+            <button
+              className={`view-btn ${viewMode === 'week' ? 'active' : ''}`}
+              onClick={() => setViewMode('week')}
+              title="Wochenansicht"
+            >
+              <FaCalendarWeek size={13} /> Woche
+            </button>
+            <button
+              className={`view-btn ${viewMode === 'dashboard' ? 'active' : ''}`}
+              onClick={() => setViewMode('dashboard')}
+              title="Analytics Dashboard"
+            >
+              <FaChartPie size={13} /> Auswertung
+            </button>
           </div>
 
-          <button
-            className={`btn-toggle ${isEditMode ? 'active' : ''}`}
-            onClick={() => setIsEditMode(!isEditMode)}
-            style={{ minWidth: '180px', justifyContent: 'center' }}
-          >
-            {isEditMode ? <FaPen /> : <FaChartPie />}
-            {isEditMode ? 'Modus: Arbeitstasks' : 'Modus: ActivityCards'}
-          </button>
+          {/* Ansichts-Toggle: Erfassen ↔ Ansicht */}
+          {viewMode !== 'dashboard' && (
+            <button
+              className={`btn-mode-toggle ${isEditMode ? 'mode-edit' : 'mode-view'}`}
+              onClick={() => setIsEditMode(!isEditMode)}
+              title={isEditMode ? 'Wechseln zu: Aktivitäts-Ansicht' : 'Wechseln zu: Buchungs-Modus'}
+            >
+              {isEditMode
+                ? <><FaPencilAlt size={12} /> Buchen</>
+                : <><FaEye size={12} /> Ansicht</>
+              }
+            </button>
+          )}
 
-          <button className="btn-refresh" onClick={() => db && refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings)}>Refresh</button>
+          {/* Einstellungen */}
+          <button
+            className="btn-settings"
+            onClick={() => setShowSettings(true)}
+            title="Einstellungen öffnen"
+          >
+            <FaCog size={14} /> Einstellungen
+          </button>
         </div>
       </div>
 

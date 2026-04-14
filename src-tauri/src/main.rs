@@ -3,7 +3,7 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
-    Manager, WindowEvent, Emitter, command
+    Manager, WindowEvent, Emitter, command, AppHandle
 };
 use std::{thread, time::Duration, mem};
 use serde::Serialize;
@@ -129,13 +129,22 @@ fn get_exe_icon(path: String) -> Result<String, String> {
     }
 }
 
+#[command]
+fn update_tray_tooltip(app: AppHandle, text: String) {
+    if let Some(tray) = app.tray_by_id("main_tray") {
+        let _ = tray.set_tooltip(Some(&text));
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
-        .invoke_handler(tauri::generate_handler![get_exe_icon])
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .invoke_handler(tauri::generate_handler![get_exe_icon, update_tray_tooltip])
         .setup(|app| {
             let handle = app.handle();
             let main_window = app.get_webview_window("main").unwrap();
@@ -155,7 +164,8 @@ fn main() {
             let quit_i = MenuItem::with_id(handle, "quit", "Beenden", true, None::<&str>)?;
             let menu = Menu::with_items(handle, &[&show_i, &quit_i])?;
 
-            let _tray = TrayIconBuilder::new()
+            let _tray = TrayIconBuilder::with_id("main_tray")
+                .tooltip("ClockworkHero – Zeit-Tracker")
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
                 .show_menu_on_left_click(false)
