@@ -120,20 +120,12 @@ export const ActivityOverlay: React.FC<Props> = ({
                     onClick={e => { e.stopPropagation(); onEventClick(props); }}
                     title={props.simpleName}
                 >
-                    <div style={{
-                        width:    `${ICON_SIZE}px`,
-                        height:   `${ICON_SIZE}px`,
-                        display:  'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                    }}>
-                        <AppIcon
-                            appName={props.simpleName}
-                            path={props.exePath}
-                            fallbackColor={props.appColor}
-                        />
-                    </div>
+                    <AppIcon
+                        appName={props.simpleName}
+                        path={props.exePath}
+                        fallbackColor={props.appColor}
+                        size={ICON_SIZE}
+                    />
                 </div>
             );
         }
@@ -180,21 +172,12 @@ export const ActivityOverlay: React.FC<Props> = ({
                 }}
                 onClick={e => { e.stopPropagation(); onEventClick(props); }}
             >
-                <div style={{
-                    width:          '26px',
-                    height:         '26px',
-                    flexShrink:     0,
-                    overflow:       'visible',
-                    display:        'flex',
-                    alignItems:     'center',
-                    justifyContent: 'center',
-                }}>
-                    <AppIcon
-                        appName={props.simpleName}
-                        path={props.exePath}
-                        fallbackColor={props.appColor}
-                    />
-                </div>
+                <AppIcon
+                    appName={props.simpleName}
+                    path={props.exePath}
+                    fallbackColor={props.appColor}
+                    size={22}
+                />
                 <div style={{
                     overflow:       'hidden',
                     textOverflow:   'ellipsis',

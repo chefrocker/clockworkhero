@@ -403,8 +403,11 @@ export const SettingsModal: React.FC<Props> = ({
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '10px', maxHeight: '400px', overflowY: 'auto' }}>
                                     {knownApps.filter(a => a.name.toLowerCase().includes(appSearch.toLowerCase())).map(app => (
                                         <div key={app.name} style={{ background: 'var(--bg-color)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                            <div className="icon-editable" onClick={() => handleIconUpdate('app', app.name)} title="Klicken um Icon zu ändern" style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--panel-bg)', borderRadius: '6px' }}>
-                                                {app.icon ? <img src={app.icon} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <AppIcon appName={app.name} fallbackColor={app.color} />}
+                                            <div className="icon-editable" onClick={() => handleIconUpdate('app', app.name)} title="Klicken um Icon zu ändern" style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--panel-bg)', borderRadius: '6px', flexShrink: 0 }}>
+                                                {app.icon
+                                                    ? <img src={app.icon} alt="" style={{ width: '26px', height: '26px', objectFit: 'contain', display: 'block' }} />
+                                                    : <AppIcon appName={app.name} fallbackColor={app.color} size={24} />
+                                                }
                                             </div>
                                             <div style={{ flex: 1, overflow: 'hidden' }}>
                                                 <div style={{ fontSize: '0.9rem', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-color)' }} title={app.name}>{app.name}</div>

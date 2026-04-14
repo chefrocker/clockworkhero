@@ -29,7 +29,7 @@ export const ActivityDetailModal: React.FC<Props> = ({ isOpen, onClose, title, e
                   boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
               }}>
                  {/* WICHTIG: Wir übergeben exePath UND title für bestes Matching */}
-                 <AppIcon path={exePath} appName={title} fallbackColor="white" className="modal-icon-large" />
+                 <AppIcon path={exePath} appName={title} fallbackColor="white" size={36} />
               </div>
               <div>
                   <h2 style={{fontSize: '1.3rem', margin: 0, fontWeight: '800', color: '#2c3e50'}}>{title}</h2>

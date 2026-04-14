@@ -323,12 +323,10 @@ export const Dashboard: React.FC<Props> = ({ db, projects }) => {
                                         boxShadow: '0 4px 10px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9',
                                         padding: '10px'
                                     }} title={`${prog.name}: ${timeStr}`}>
-                                        <div style={{ width: '38px', height: '38px', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'visible', flexShrink: 0 }}>
+                                        <div style={{ width: '38px', height: '38px', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                             {prog.icon
-                                                ? <img src={prog.icon} alt={prog.name} style={{ width: '34px', height: '34px', objectFit: 'contain' }} />
-                                                : <div style={{ width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <AppIcon appName={prog.name} path={(prog as any).exePath} fallbackColor={prog.color} />
-                                                  </div>
+                                                ? <img src={prog.icon} alt={prog.name} style={{ width: '34px', height: '34px', objectFit: 'contain', display: 'block' }} />
+                                                : <AppIcon appName={prog.name} path={(prog as any).exePath} fallbackColor={prog.color} size={34} />
                                             }
                                         </div>
                                         <div style={{ background: '#3b82f6', color: 'white', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' }}>

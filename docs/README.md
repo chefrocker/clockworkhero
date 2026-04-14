@@ -1,6 +1,6 @@
 # ClockworkHero – Dokumentation
 
-> Stand: April 2026 | Version 0.9.5-beta
+> Stand: April 2026 | Version 1.0.0
 
 ---
 
@@ -8,33 +8,35 @@
 
 | Dokument | Beschreibung |
 |---|---|
-| [01_architektur.md](01_architektur.md) | Projektübersicht, Technologie-Stack, Komponentenbaum, Datenbankschema, Datenfluss |
+| [01_architektur.md](01_architektur.md) | Projektübersicht, Technologie-Stack, Hooks, Komponentenbaum, Datenbankschema, Datenfluss |
 | [03_feature_ideen.md](03_feature_ideen.md) | Umfangreicher Ideenkatalog für neue Features – kategorisiert nach Aufwand und Nutzen |
-| [04_roadmap.md](04_roadmap.md) | Entwicklungsplan: Was wurde gemacht, was kommt als nächstes, Priorisierungsmatrix |
+| [04_roadmap.md](04_roadmap.md) | Entwicklungsplan: Was ist fertig, was kommt als nächstes, Changelog |
+| [05_auto_update_einrichten.md](05_auto_update_einrichten.md) | Auto-Update via GitHub Releases einrichten, Release-Prozess, Node.js 24 Fix |
 | [ClockworkHero_SDD_v1.0.md](ClockworkHero_SDD_v1.0.md) | Software Design Document (ursprüngliche Spezifikation) |
 
 ---
 
 ## Kurzübersicht
 
-**ClockworkHero** ist eine Desktop-Zeiterfassungsapp (Tauri + React + TypeScript), die:
+**ClockworkHero** ist eine Desktop-Zeiterfassungsapp (Tauri 2 + React + TypeScript), die:
 - **Automatisch** aktive Anwendungen/Fenster trackt
-- **Manuelle** Projektbuchungen mit Drag & Drop erlaubt
+- **Manuelle** Projektbuchungen mit Timer und Session-Modal erlaubt
 - Beides in einer **Kalenderansicht** (Tag/Woche) überlagert
-- Ein **Analytics-Dashboard** mit Charts und Export bietet
+- Ein **Analytics-Dashboard** mit Charts und Excel-Export bietet
+- **Auto-Updates** via GitHub Releases ausliefert
+- **Keyboard Shortcuts** für effiziente Navigation bietet
 
-### Wichtigste bekannte Probleme
-1. `slotRank`-Algorithmus erkennt zeitliche Überlappungen nicht korrekt → Icons überlagern sich
-2. Z-Index-System zwischen manuellen Sessions und Activity-Icons ist unklar definiert
-3. Auto-Zoom kann Layout-Sprünge verursachen
+### Architektur auf einen Blick
 
-→ Details und Fixes: [02_visuelle_probleme_und_handlungsempfehlungen.md](02_visuelle_probleme_und_handlungsempfehlungen.md)
+- `App.tsx` (~200 Zeilen) verdrahtet nur noch 4 Hooks und JSX
+- `src/hooks/`: `useAppInit`, `useTimer`, `useCalendarData`, `useKeyboardShortcuts`
+- `src/components/`: CalendarEngine, Toast, UpdateChecker, ErrorBoundary und weitere
+- `src/services/`: db.ts (mit Performance-Indexes), analyticsService, exportService
+- Kein globaler State-Manager – nur React-Hooks
 
-### Top Feature-Empfehlungen
-1. **Keyboard Shortcuts** (schnell, hoher Nutzen)
-2. **Drag & Drop Activity auf Projekt** (mittlerer Aufwand, sehr nützlich)
-3. **App-Kategorisierung** für bessere Analytics
-4. **Pomodoro-Modus** für Produktivitäts-Nutzer
-5. **Command Palette** (Ctrl+K) für Power-User
+### Top-Prioritäten für v1.1.0
 
-→ Alle Ideen: [03_feature_ideen.md](03_feature_ideen.md)
+1. **Drag & Drop Activity → Projekt** (größter Alltagsnutzen)
+2. **Unit-Tests** für kritische Services
+3. **PDF-Export** Wochenbericht
+4. **App-Kategorisierung** für bessere Analytics

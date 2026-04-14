@@ -532,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "clockworkhero"
-version = "1.0.0"
+version = "0.9.10"
 dependencies = [
  "base64 0.21.7",
  "image 0.24.9",

@@ -176,11 +176,10 @@ export const ProjectsTab: React.FC<Props> = ({ projects, onUpdate, onDelete, onA
                                 cursor: 'pointer', overflow: 'visible', flexShrink: 0,
                             }}
                         >
-                            {p.iconType === 'image' ? (
-                                <img src={p.icon || ''} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                            ) : (
-                                <AppIcon appName={p.icon || p.name} fallbackColor={p.color} />
-                            )}
+                            {p.iconType === 'image'
+                            ? <img src={p.icon || ''} alt="" style={{ width: '26px', height: '26px', objectFit: 'contain', display: 'block' }} />
+                            : <AppIcon appName={p.icon || p.name} fallbackColor={p.color} size={24} />
+                        }
                         </div>
 
                         {/* Farbe */}

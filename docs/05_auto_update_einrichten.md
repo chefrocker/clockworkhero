@@ -30,7 +30,6 @@ C:\Users\[Name]\AppData\Roaming\com.chefrocker.clockworkhero\   ← wird NICHT a
 ```
 
 Das ist Tauri-Architektur — Updates ersetzen nur den Programm-Code, nie die Nutzerdaten.
-**Diese Trennung ist bereits korrekt umgesetzt** und erfordert keine weiteren Massnahmen.
 
 ---
 
@@ -45,20 +44,28 @@ git push --tags      →      baut .exe/.msi
                      →      erstellt GitHub Release
                      →      lädt latest.json hoch   →  ClockworkHero prüft beim Start
                                                      →  findet neue Version
-                                                     →  zeigt Toast: "Update v1.1.0"
+                                                     →  zeigt Toast: "Update v1.1.0 verfügbar"
                                                      →  Nutzer klickt "Installieren"
                                                      →  Download + Installation
                                                      →  Neustart → neue Version läuft
 ```
 
+### Manuell auf Updates prüfen
+
+Zusätzlich zur automatischen Prüfung beim Start kann der Nutzer jederzeit manuell prüfen:
+
+```
+Einstellungen (Ctrl+,) → Über → "Nach Updates suchen"
+```
+
+Ein Toast zeigt das Ergebnis: entweder "Neue Version verfügbar" (mit Installieren-Button)
+oder "Bereits aktuell".
+
 ---
 
-## Einmalige Einrichtung (noch offen)
+## Einmalige Einrichtung
 
 ### Schritt 1 — GitHub Secrets hinterlegen
-
-Du hast den Public Key bereits in `tauri.conf.json` eingetragen. Jetzt braucht GitHub
-den dazugehörigen Private Key zum Signieren.
 
 **Im Browser:**
 ```
@@ -73,7 +80,7 @@ Zwei Secrets anlegen:
 
 | Name | Wert |
 |------|------|
-| `TAURI_SIGNING_PRIVATE_KEY` | Den langen privaten Schlüssel (aus der Datei `~/.tauri/clockworkhero.key` oder aus deinen Notizen) |
+| `TAURI_SIGNING_PRIVATE_KEY` | Den langen privaten Schlüssel (aus `~/.tauri/clockworkhero.key`) |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Das Passwort dazu (bei leerem Passwort: einfach ein Leerzeichen eingeben) |
 
 > **Wo ist der Private Key?**  
@@ -83,7 +90,7 @@ Zwei Secrets anlegen:
 
 ---
 
-### Schritt 2 — Erstes Release erstellen (= erstes kompiliertes Programm)
+### Schritt 2 — Erstes Release erstellen
 
 ```powershell
 # Im Projektordner:
@@ -91,8 +98,8 @@ git add .
 git commit -m "Auto-Update Konfiguration fertiggestellt"
 git push origin master
 
-# Jetzt das erste Release-Tag setzen:
-git tag v0.9.5
+# Das erste Release-Tag setzen:
+git tag v1.0.0
 git push origin master --tags
 ```
 
@@ -100,49 +107,35 @@ Dann unter `https://github.com/chefrocker/clockworkhero/actions` beobachten wie 
 Pipeline läuft (ca. 10–15 Minuten). Am Ende findest du unter
 `https://github.com/chefrocker/clockworkhero/releases` den fertigen Installer.
 
-**Was wird kompiliert und was nicht?**
-
-| Bestandteil | Wie wird es geliefert? |
-|-------------|------------------------|
-| `ClockworkHero.exe` (Tauri + Rust) | Wird neu kompiliert und im Installer verpackt |
-| React Frontend (dist/) | Wird neu gebaut und in den Installer eingebettet |
-| SQLite-Datenbank | Bleibt immer auf dem Nutzer-PC, wird nie überschrieben |
-| App-Einstellungen | Bleiben auf dem Nutzer-PC, werden nie überschrieben |
-
-Der Installer ersetzt also immer die **komplette Anwendung** (Programmdateien),
-aber nie die **Nutzerdaten** (Datenbank, Einstellungen).
-
 ---
 
 ## Zukünftige Updates veröffentlichen
-
-Das ist der normale Ablauf für jedes neue Update:
 
 ### 1. Version erhöhen
 
 In **zwei Dateien** die Versionsnummer anpassen:
 
-**`src-tauri/tauri.conf.json`** (Zeile 4):
+**`src-tauri/tauri.conf.json`**:
 ```json
-"version": "1.0.0"
+"version": "1.1.0"
 ```
 
-**`src-tauri/Cargo.toml`** (Zeile 3):
+**`src-tauri/Cargo.toml`**:
 ```toml
-version = "1.0.0"
+version = "1.1.0"
 ```
 
-> **Regel:** Immer beide Dateien synchron halten. Semantic Versioning verwenden:
-> - Bugfix: `0.9.5` → `0.9.6`
-> - Neues Feature: `0.9.5` → `0.10.0`  
-> - Grosse Änderung: `0.9.5` → `1.0.0`
+> **Regel:** Immer beide Dateien synchron halten. Semantic Versioning:
+> - Bugfix: `1.0.0` → `1.0.1`
+> - Neues Feature: `1.0.0` → `1.1.0`
+> - Breaking Change: `1.0.0` → `2.0.0`
 
 ### 2. Committen und taggen
 
 ```powershell
 git add .
-git commit -m "Version 1.0.0: Kurze Beschreibung der Änderungen"
-git tag v1.0.0
+git commit -m "Version 1.1.0: Kurze Beschreibung der Änderungen"
+git tag v1.1.0
 git push origin master --tags
 ```
 
@@ -167,13 +160,35 @@ src-tauri/target/release/bundle/msi/ClockworkHero_x.x.x_x64_en-US.msi
 
 ---
 
+## Node.js 24 – bekanntes Problem mit OpenSSL
+
+Die GitHub Actions Pipeline verwendet Node.js 24. Diese Version hat eine Inkompatibilität
+mit älteren OpenSSL-Konfigurationen, die zu Build-Fehlern führen kann:
+
+```
+Error: error:0308010C:digital envelope routines::unsupported
+```
+
+**Fix** – in `.github/workflows/release.yml` die Environment-Variable setzen:
+
+```yaml
+env:
+  NODE_OPTIONS: --openssl-legacy-provider
+```
+
+Alternativ in der Pipeline explizit Node.js 20 LTS verwenden, wenn das Problem persistiert.
+
+---
+
 ## Fehlerdiagnose
 
 | Problem | Ursache | Lösung |
 |---------|---------|--------|
 | Pipeline schlägt fehl mit "signature error" | Falscher Private Key in Secrets | Secrets prüfen, Key neu kopieren |
 | Pipeline schlägt fehl mit "pubkey empty" | Public Key fehlt in tauri.conf.json | Public Key eintragen |
+| OpenSSL-Fehler im Build | Node.js 24 Inkompatibilität | `NODE_OPTIONS=--openssl-legacy-provider` setzen |
 | Nutzer sieht kein Update | Versionsnummer nicht erhöht | Beide Dateien prüfen |
+| "Nach Updates suchen" zeigt nichts | Repo ist privat oder Release fehlt | Repo auf Public setzen, Release prüfen |
 | Download schlägt fehl | Repo ist privat | Repo auf Public setzen oder Token konfigurieren |
 | "latest.json not found" | Pipeline ist noch nicht fertig | 15 Min warten, dann nochmal |
 
