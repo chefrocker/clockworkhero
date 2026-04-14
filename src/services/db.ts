@@ -68,11 +68,19 @@ export async function initDatabase(): Promise<Database> {
   await db.execute(`CREATE TABLE IF NOT EXISTS work_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, description TEXT, start_time DATETIME, end_time DATETIME)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
 
-  // Schema-Migrationen (silent – Spalte existiert bereits → kein Fehler)
-  try { await db.execute("ALTER TABLE logs ADD COLUMN exe_path TEXT"); } catch (_) { }
-  try { await db.execute("ALTER TABLE projects ADD COLUMN icon TEXT"); } catch (_) { }
-  try { await db.execute("ALTER TABLE projects ADD COLUMN icon_type TEXT"); } catch (_) { }
-  try { await db.execute("ALTER TABLE app_colors ADD COLUMN icon TEXT"); } catch (_) { }
+  // Schema-Migrationen (silent wenn Spalte bereits existiert, sonst Warnung)
+  const migrate = async (sql: string) => {
+    try { await db.execute(sql); }
+    catch (e: any) {
+      if (!String(e).toLowerCase().includes('duplicate column')) {
+        console.warn('Schema-Migration übersprungen:', e);
+      }
+    }
+  };
+  await migrate("ALTER TABLE logs ADD COLUMN exe_path TEXT");
+  await migrate("ALTER TABLE projects ADD COLUMN icon TEXT");
+  await migrate("ALTER TABLE projects ADD COLUMN icon_type TEXT");
+  await migrate("ALTER TABLE app_colors ADD COLUMN icon TEXT");
 
   // Performance-Indexes (IF NOT EXISTS → idempotent)
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_logs_created_at      ON logs(created_at)`);
@@ -96,12 +104,12 @@ export async function loadSettings(db: Database): Promise<AppSettings> {
     if (row.key === 'workEnd') settings.workEnd = row.value;
     if (row.key === 'dailyTarget') settings.dailyTarget = parseFloat(row.value);
     if (row.key === 'theme') settings.theme = row.value;
-    if (row.key === 'groupingThreshold') settings.groupingThreshold = parseInt(row.value);
+    if (row.key === 'groupingThreshold') settings.groupingThreshold = parseInt(row.value, 10);
     if (row.key === 'autoGrouping') settings.autoGrouping = row.value === 'true';
     if (row.key === 'autostart') settings.autostart = row.value === 'true';
     if (row.key === 'adminPassword') settings.adminPassword = row.value;
     if (row.key === 'weekSchedule') { try { settings.weekSchedule = JSON.parse(row.value); } catch (e) { } }
-    if (row.key === 'firstDayOfWeek') settings.firstDayOfWeek = parseInt(row.value) as 0 | 1 | 6;
+    if (row.key === 'firstDayOfWeek') settings.firstDayOfWeek = parseInt(row.value, 10) as 0 | 1 | 6;
   });
   return settings;
 }
@@ -168,13 +176,22 @@ export async function deleteProject(db: Database, id: number) {
   await db.execute("DELETE FROM projects WHERE id = $1", [id]); await db.execute("UPDATE work_sessions SET project_id = NULL WHERE project_id = $1", [id]);
 }
 
+/** Gibt die Anzahl der Sessionen zurück, die einem Projekt zugeordnet sind. */
+export async function countSessionsByProject(db: Database, projectId: number): Promise<number> {
+  const rows = await db.select<{ cnt: number }[]>(
+    "SELECT COUNT(*) as cnt FROM work_sessions WHERE project_id = $1", [projectId]
+  );
+  return rows[0]?.cnt ?? 0;
+}
+
 // --- LOGGING & SESSIONS ---
 export async function logActiveWindow(db: Database, title: string, path: string) {
   await db.execute("INSERT INTO logs (title, exe_path) VALUES ($1, $2)", [title, path]);
 }
 
 export async function saveSession(db: Database, start: Date, end: Date, projectId: string, desc: string, existingId?: number) {
-  const startIso = start.toISOString(); const endIso = end.toISOString(); const pId = projectId ? parseInt(projectId) : null;
+  if (start >= end) throw new Error('Startzeit muss vor der Endzeit liegen.');
+  const startIso = start.toISOString(); const endIso = end.toISOString(); const pId = projectId ? parseInt(projectId, 10) : null;
   if (existingId) await db.execute("DELETE FROM work_sessions WHERE id = $1", [existingId]);
   const conflicts = await db.select<WorkSession[]>("SELECT * FROM work_sessions WHERE start_time < $1 AND end_time > $2", [endIso, startIso]);
   for (const c of conflicts) {

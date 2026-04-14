@@ -1,10 +1,13 @@
 import React, { useState, useRef } from 'react';
 import { FaPlus, FaImage, FaTrash, FaTimes } from 'react-icons/fa';
+import Database from '@tauri-apps/plugin-sql';
 import { Project } from '../../types';
 import { AppIcon } from '../AppIcon';
+import { countSessionsByProject } from '../../services/db';
 
 interface Props {
     projects: Project[];
+    db?: Database | null;
     onUpdate: (id: number, name: string, color: string, icon?: string, iconType?: 'app' | 'image') => void;
     onDelete: (id: number) => void;
     onAdd: (name: string, color: string, icon?: string, iconType?: 'app' | 'image') => void;
@@ -12,12 +15,14 @@ interface Props {
     onFileChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
-export const ProjectsTab: React.FC<Props> = ({ projects, onUpdate, onDelete, onAdd, onIconUpdate }) => {
+export const ProjectsTab: React.FC<Props> = ({ projects, db, onUpdate, onDelete, onAdd, onIconUpdate }) => {
     const [newProjName,      setNewProjName]      = useState('');
     const [newProjColor,     setNewProjColor]     = useState('#3498db');
     const [newProjAppIcon,   setNewProjAppIcon]   = useState('');         // App-Name als Icon
     const [newProjImageIcon, setNewProjImageIcon] = useState<string>(''); // Base64-Bild
     const [iconMode,         setIconMode]         = useState<'app' | 'image'>('app');
+    // id des Projekts das auf Bestätigung wartet, sessionCount dazu
+    const [pendingDelete, setPendingDelete] = useState<{ id: number; name: string; sessionCount: number } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Bild direkt lesen (ohne Cropper) – für neue Projekte ausreichend
@@ -32,6 +37,11 @@ export const ProjectsTab: React.FC<Props> = ({ projects, onUpdate, onDelete, onA
         reader.readAsDataURL(file);
         // Input zurücksetzen damit dasselbe Bild erneut gewählt werden kann
         e.target.value = '';
+    };
+
+    const handleDeleteClick = async (p: Project) => {
+        const count = db ? await countSessionsByProject(db, p.id) : 0;
+        setPendingDelete({ id: p.id, name: p.name, sessionCount: count });
     };
 
     const handleCreate = () => {
@@ -150,6 +160,39 @@ export const ProjectsTab: React.FC<Props> = ({ projects, onUpdate, onDelete, onA
                 </button>
             </div>
 
+            {/* ── Löschen-Bestätigung ───────────────────────────────── */}
+            {pendingDelete && (
+                <div style={{
+                    marginBottom: '16px', padding: '16px 20px', borderRadius: '10px',
+                    background: '#fef2f2', border: '1px solid #fecaca',
+                }}>
+                    <div style={{ fontWeight: 700, color: '#b91c1c', marginBottom: '6px' }}>
+                        Projekt „{pendingDelete.name}" wirklich löschen?
+                    </div>
+                    {pendingDelete.sessionCount > 0 && (
+                        <div style={{ fontSize: '0.85rem', color: '#7f1d1d', marginBottom: '10px' }}>
+                            ⚠️ {pendingDelete.sessionCount} Session{pendingDelete.sessionCount !== 1 ? 'en' : ''} werden dabei als „Ohne Projekt" markiert.
+                        </div>
+                    )}
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <button
+                            className="btn-save"
+                            style={{ background: '#ef4444', height: '36px' }}
+                            onClick={() => { onDelete(pendingDelete.id); setPendingDelete(null); }}
+                        >
+                            Ja, löschen
+                        </button>
+                        <button
+                            className="btn-secondary"
+                            style={{ height: '36px' }}
+                            onClick={() => setPendingDelete(null)}
+                        >
+                            Abbrechen
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* ── Vorhandene Projekte ────────────────────────────────── */}
             <h3 className="settings-h3" style={{ color: 'var(--text-color)' }}>Vorhandene Projekte</h3>
             <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', overflow: 'hidden' }}>
@@ -206,7 +249,7 @@ export const ProjectsTab: React.FC<Props> = ({ projects, onUpdate, onDelete, onA
 
                         {/* Löschen */}
                         <button
-                            onClick={() => onDelete(p.id)}
+                            onClick={() => handleDeleteClick(p)}
                             style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}
                             title="Projekt löschen"
                         >

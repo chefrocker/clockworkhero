@@ -64,7 +64,7 @@ export function useTimer(db: Database | null, onSaved?: () => void) {
     }
     const id = setInterval(() => {
       const diff = Date.now() - timerState.startTime!;
-      setTimerDisplay(new Date(diff).toISOString().substr(11, 8));
+      setTimerDisplay(new Date(diff).toISOString().substring(11, 19));
     }, 1000);
     return () => clearInterval(id);
   }, [timerState.isRunning, timerState.startTime]);

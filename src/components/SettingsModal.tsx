@@ -386,6 +386,7 @@ export const SettingsModal: React.FC<Props> = ({
                         {activeTab === 'projects' && (
                             <ProjectsTab
                                 projects={projects}
+                                db={db}
                                 onUpdate={onUpdateProject}
                                 onDelete={onDeleteProject}
                                 onAdd={onAddProject}

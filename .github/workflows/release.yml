@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'   # Auslöser: git tag v1.0.0 && git push --tags
+      - 'v*'   # Auslöser: git tag v0.9.11 && git push --tags
 
 jobs:
   build-and-release:
@@ -32,6 +32,34 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      # ── DIAGNOSE: Signing-Key prüfen ─────────────────────────────────────────
+      # Wenn dieser Schritt fehlschlägt → TAURI_SIGNING_PRIVATE_KEY fehlt im Secret!
+      # Settings → Secrets and variables → Actions → New repository secret
+      - name: Signing-Key prüfen
+        shell: pwsh
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:KEY)) {
+            Write-Error @"
+          ════════════════════════════════════════════════════════════
+          FEHLER: TAURI_SIGNING_PRIVATE_KEY ist nicht gesetzt!
+
+          Ohne diesen Key werden keine .sig-Dateien erzeugt und
+          latest.json wird nicht erstellt → Auto-Update funktioniert nicht.
+
+          Lösung:
+            1. Lokal einmalig ausführen: npx tauri signer generate -w ~/.tauri/clockworkhero.key
+            2. Inhalt der .key-Datei als Secret 'TAURI_SIGNING_PRIVATE_KEY' hinterlegen
+            3. Passwort (oder leer) als Secret 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD' hinterlegen
+            4. Den PUBLIC Key in tauri.conf.json → plugins.updater.pubkey eintragen
+          ════════════════════════════════════════════════════════════
+          "@
+            exit 1
+          }
+          $len = $env:KEY.Length
+          Write-Host "✓ Signing-Key vorhanden ($len Zeichen)"
+
       - name: npm install
         run: npm ci
 
@@ -49,5 +77,30 @@ jobs:
             _Changelog hier eintragen oder automatisch generieren lassen._
           releaseDraft: false
           prerelease: false
-          # Erstellt automatisch latest.json für den Updater
+          # Erstellt automatisch latest.json für den Updater (bevorzugt NSIS .exe)
           updaterJsonPreferNsis: true
+
+      # ── DIAGNOSE: Release-Assets auflisten ───────────────────────────────────
+      # Zeigt welche Dateien hochgeladen wurden – latest.json muss dabei sein!
+      - name: Release-Assets prüfen
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN"; Accept = "application/vnd.github+json" }
+          $repo = "${{ github.repository }}"
+          $release = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/tags/$env:TAG" -Headers $headers
+          Write-Host "Release: $($release.name)"
+          Write-Host "Assets:"
+          $hasLatestJson = $false
+          foreach ($asset in $release.assets) {
+            Write-Host "  - $($asset.name) ($([math]::Round($asset.size/1024, 1)) KB)"
+            if ($asset.name -eq "latest.json") { $hasLatestJson = $true }
+          }
+          if ($hasLatestJson) {
+            Write-Host "✓ latest.json wurde hochgeladen – Auto-Update sollte funktionieren!"
+          } else {
+            Write-Warning "✗ latest.json fehlt! Auto-Update wird NICHT funktionieren."
+            Write-Warning "  Ursache: Wahrscheinlich fehlt TAURI_SIGNING_PRIVATE_KEY_PASSWORD im Secret."
+          }

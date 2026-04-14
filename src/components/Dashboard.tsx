@@ -91,7 +91,12 @@ export const Dashboard: React.FC<Props> = ({ db, projects }) => {
         setEndDate(end.toISOString().slice(0, 10));
     };
 
-    if (!stats) return <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>Lade Daten...</div>;
+    if (!stats) return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '12px', color: '#94a3b8' }}>
+            <div style={{ fontSize: '2rem', animation: 'spin 1.2s linear infinite' }}>⏳</div>
+            <div style={{ fontSize: '0.95rem' }}>Daten werden geladen…</div>
+        </div>
+    );
 
     const patternIcon = stats.workPattern === 'early'   ? <FaSun />
                       : stats.workPattern === 'night'   ? <FaMoon />
@@ -308,51 +313,129 @@ export const Dashboard: React.FC<Props> = ({ db, projects }) => {
                         />
                     </div>
 
-                    <div className="dashboard-panel" style={{ marginBottom: '30px' }}>
-                        <h3 className="panel-title">Wichtigste Programme</h3>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', padding: '10px' }}>
-                            {stats.programUsage.slice(0, 10).map((prog, idx) => {
-                                const totalMinutes = Math.round(prog.value * 60);
-                                const h = Math.floor(totalMinutes / 60);
-                                const m = totalMinutes % 60;
-                                const timeStr = `${h}h ${m}m`;
-                                return (
-                                    <div key={idx} style={{
-                                        width: '80px', height: '100px', borderRadius: '12px', background: 'white',
-                                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                                        boxShadow: '0 4px 10px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9',
-                                        padding: '10px'
-                                    }} title={`${prog.name}: ${timeStr}`}>
-                                        <div style={{ width: '38px', height: '38px', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                            {prog.icon
-                                                ? <img src={prog.icon} alt={prog.name} style={{ width: '34px', height: '34px', objectFit: 'contain', display: 'block' }} />
-                                                : <AppIcon appName={prog.name} path={(prog as any).exePath} fallbackColor={prog.color} size={34} />
-                                            }
-                                        </div>
-                                        <div style={{ background: '#3b82f6', color: 'white', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' }}>
-                                            {timeStr}
-                                        </div>
-                                        <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '4px', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
-                                            {prog.name}
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                    {stats.programUsage.length === 0 ? (
+                        <div className="dashboard-panel" style={{ textAlign: 'center', padding: '50px 20px', color: '#94a3b8' }}>
+                            <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🖥️</div>
+                            <div style={{ fontWeight: 600, color: '#475569', marginBottom: '6px' }}>Keine Programm-Daten</div>
+                            <div style={{ fontSize: '0.85rem' }}>Im gewählten Zeitraum wurden keine App-Aktivitäten aufgezeichnet.</div>
                         </div>
-                    </div>
+                    ) : (
+                        <>
+                        <div className="dashboard-panel" style={{ marginBottom: '30px' }}>
+                            <h3 className="panel-title">Top Programme</h3>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', padding: '10px' }}>
+                                {stats.programUsage.slice(0, 10).map((prog, idx) => {
+                                    const totalMinutes = Math.round(prog.value * 60);
+                                    const h = Math.floor(totalMinutes / 60);
+                                    const m = totalMinutes % 60;
+                                    const timeStr = `${h}h ${m}m`;
+                                    return (
+                                        <div key={idx} style={{
+                                            width: '80px', height: '100px', borderRadius: '12px', background: 'white',
+                                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                            boxShadow: '0 4px 10px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9',
+                                            padding: '10px'
+                                        }} title={`${prog.name}: ${timeStr}`}>
+                                            <div style={{ width: '38px', height: '38px', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                {prog.icon
+                                                    ? <img src={prog.icon} alt={prog.name} style={{ width: '34px', height: '34px', objectFit: 'contain', display: 'block' }} />
+                                                    : <AppIcon appName={prog.name} path={prog.exePath} fallbackColor={prog.color} size={34} />
+                                                }
+                                            </div>
+                                            <div style={{ background: '#3b82f6', color: 'white', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' }}>
+                                                {timeStr}
+                                            </div>
+                                            <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '4px', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
+                                                {prog.name}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
 
-                    <div className="dashboard-panel">
-                        <h3 className="panel-title">Programm-Nutzung (Prozentuale Verteilung)</h3>
-                        <ResponsiveContainer width="100%" height={350} debounce={50}>
-                            <PieChart>
-                                <Pie data={stats.programUsage} cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={5} dataKey="value">
-                                    {stats.programUsage.map((entry, i) => <Cell key={i} fill={entry.color} stroke="none" />)}
-                                </Pie>
-                                <Tooltip formatter={(v: number) => [`${v} Std`, 'Dauer']} contentStyle={{ borderRadius: '12px', border: 'none' }} />
-                                <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
+                        {/* ── App-Nutzungs-Ranking ──────────────────────────── */}
+                        <div className="dashboard-panel" style={{ marginBottom: '30px' }}>
+                            <h3 className="panel-title">App-Nutzungs-Ranking</h3>
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '16px' }}>
+                                Alle erfassten Programme sortiert nach Nutzungsdauer — basierend auf Aktivitäts-Logs.
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {(() => {
+                                    const maxVal = stats.programUsage[0]?.value || 1;
+                                    return stats.programUsage.map((prog, idx) => {
+                                        const totalMinutes = Math.round(prog.value * 60);
+                                        const h = Math.floor(totalMinutes / 60);
+                                        const m = totalMinutes % 60;
+                                        const timeStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+                                        const barPct = Math.max(2, (prog.value / maxVal) * 100);
+                                        const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : null;
+                                        return (
+                                            <div key={idx} style={{
+                                                display: 'flex', alignItems: 'center', gap: '12px',
+                                                padding: '8px 12px', borderRadius: '8px',
+                                                background: idx < 3 ? '#f8faff' : 'transparent',
+                                                border: idx < 3 ? '1px solid #e0e7ff' : '1px solid transparent',
+                                                transition: 'background 0.15s',
+                                            }}>
+                                                {/* Rang */}
+                                                <div style={{
+                                                    minWidth: '32px', textAlign: 'center',
+                                                    fontSize: medal ? '1.1rem' : '0.8rem',
+                                                    color: '#94a3b8', fontWeight: 700,
+                                                }}>
+                                                    {medal ?? `#${idx + 1}`}
+                                                </div>
+
+                                                {/* Icon */}
+                                                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px' }}>
+                                                    {prog.icon
+                                                        ? <img src={prog.icon} alt={prog.name} style={{ width: '26px', height: '26px', objectFit: 'contain', display: 'block' }} />
+                                                        : <AppIcon appName={prog.name} path={prog.exePath} fallbackColor={prog.color} size={26} />
+                                                    }
+                                                </div>
+
+                                                {/* Name + Balken */}
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px' }}>
+                                                        <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            {prog.name}
+                                                        </span>
+                                                        <span style={{ fontSize: '0.8rem', color: '#64748b', marginLeft: '8px', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                                                            {timeStr} · {prog.percentage}%
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ height: '5px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                                                        <div style={{
+                                                            height: '100%',
+                                                            width: `${barPct}%`,
+                                                            background: prog.color,
+                                                            borderRadius: '3px',
+                                                            transition: 'width 0.6s ease',
+                                                        }} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        </div>
+
+                        <div className="dashboard-panel">
+                            <h3 className="panel-title">Programm-Nutzung (Prozentuale Verteilung)</h3>
+                            <ResponsiveContainer width="100%" height={350} debounce={50}>
+                                <PieChart>
+                                    <Pie data={stats.programUsage.slice(0, 12)} cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={5} dataKey="value">
+                                        {stats.programUsage.slice(0, 12).map((entry, i) => <Cell key={i} fill={entry.color} stroke="none" />)}
+                                    </Pie>
+                                    <Tooltip formatter={(v: number) => [`${v} Std`, 'Dauer']} contentStyle={{ borderRadius: '12px', border: 'none' }} />
+                                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                        </>
+                    )}
                 </>
             )}
 

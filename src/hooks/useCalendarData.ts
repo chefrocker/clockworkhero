@@ -159,5 +159,5 @@ export function useCalendarData(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db]);
 
-  return { calendarEvents, projects, setProjects, refresh, handleRangeChange };
+  return { calendarEvents, projects, refresh, handleRangeChange };
 }

@@ -24,7 +24,7 @@ export interface DashboardStats {
     avgDaily: number;
     avgEntriesPerDay: number;
     projectDistribution: { name: string, value: number, color: string, percentage: number }[];
-    programUsage: { name: string, value: number, color: string, percentage: number, icon?: string }[];
+    programUsage: { name: string, value: number, color: string, percentage: number, icon?: string, exePath?: string }[];
     trends: { name: string, changePercent: number, currentHours: number, prevHours: number, color: string }[];
     history: { name: string, [key: string]: any }[];
     peakHours: { hour: string, value: number }[];
@@ -205,8 +205,7 @@ export async function getDashboardStats(db: Database, filter: DashboardFilter): 
                 percentage: logs.length > 0 ? Math.round((data.count / logs.length) * 100) : 0
             };
         })
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 10);
+        .sort((a, b) => b.value - a.value);
 
     // ── Aufbereitung: Projekt-Distribution, History, Trends ──────────────────
     const projectDistribution = Array.from(currentMap.entries()).map(([name, data]) => ({
