@@ -781,6 +781,7 @@ textarea.input-text {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
   border: 1px solid rgba(0, 0, 0, 0.1);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
+  overflow: visible;  /* kein Abschneiden des Icons am Rand */
 }
 
 body.dark-mode .activity-overlay-icon {

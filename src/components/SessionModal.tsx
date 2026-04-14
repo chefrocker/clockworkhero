@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaClock, FaSave, FaTimes, FaPlus, FaTrash } from 'react-icons/fa';
 import { Project } from '../types';
+import { toast } from './Toast';
 
 interface Props {
   isOpen: boolean;
@@ -88,28 +89,51 @@ export const SessionModal: React.FC<Props> = ({ isOpen, onClose, onSave, onDelet
     }
   };
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   const handleQuickCreateProject = () => {
-    if (newProjectName.trim()) {
-      onAddProject(newProjectName, "#3498db", "", "app");
-      setIsCreatingProject(false);
-    }
+    const name = newProjectName.trim();
+    if (!name) return;
+    if (name.length > 50) { toast.warning('Name zu lang', 'Maximal 50 Zeichen.'); return; }
+    onAddProject(name, "#3498db", "", "app");
+    setIsCreatingProject(false);
+    toast.success('Projekt erstellt', name);
   };
 
   const handleSave = () => {
-    if (start && end) {
-      const finalStart = updateDateFromTime(start, startTime);
-      let finalEnd = updateDateFromTime(start, endTime);
-      if (finalEnd < finalStart) finalEnd.setDate(finalEnd.getDate() + 1);
-      onSave(projectId, description, finalStart, finalEnd);
+    if (!projectId) {
+      toast.warning('Kein Projekt gewählt', 'Bitte wähle ein Projekt aus.');
+      return;
     }
+    if (!start || !end) return;
+
+    const finalStart = updateDateFromTime(start, startTime);
+    let finalEnd = updateDateFromTime(start, endTime);
+    if (finalEnd <= finalStart) finalEnd.setDate(finalEnd.getDate() + 1);
+
+    const durationMs = finalEnd.getTime() - finalStart.getTime();
+    if (durationMs < 60_000) {
+      toast.warning('Zu kurz', 'Die Session muss mindestens 1 Minute lang sein.');
+      return;
+    }
+    if (durationMs > 24 * 3600_000) {
+      toast.warning('Zu lang', 'Eine Session kann maximal 24 Stunden dauern.');
+      return;
+    }
+
+    onSave(projectId, description, finalStart, finalEnd);
   };
 
   const handleDelete = () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      setTimeout(() => setConfirmDelete(false), 4000); // Auto-Reset nach 4s
+      return;
+    }
     if (onDelete && editingSessionId) {
-      if (window.confirm("Möchtest du diesen Eintrag wirklich löschen?")) {
-        onDelete(`manual-${editingSessionId}`);
-        onClose();
-      }
+      onDelete(`manual-${editingSessionId}`);
+      onClose();
+      toast.success('Eintrag gelöscht');
     }
   };
 
@@ -220,8 +244,17 @@ export const SessionModal: React.FC<Props> = ({ isOpen, onClose, onSave, onDelet
           {/* LÖSCHEN BUTTON (Links) */}
           <div>
             {editingSessionId && (
-              <button className="btn-secondary" onClick={handleDelete} style={{ color: '#ef4444', borderColor: '#ef4444' }}>
-                <FaTrash /> Löschen
+              <button
+                className="btn-secondary"
+                onClick={handleDelete}
+                style={{
+                  color:       confirmDelete ? 'white'   : '#ef4444',
+                  borderColor: '#ef4444',
+                  background:  confirmDelete ? '#ef4444' : undefined,
+                  transition:  'all 0.2s',
+                }}
+              >
+                <FaTrash /> {confirmDelete ? 'Wirklich löschen?' : 'Löschen'}
               </button>
             )}
           </div>

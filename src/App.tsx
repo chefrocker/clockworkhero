@@ -5,6 +5,7 @@ import { FaCalendarDay, FaCalendarWeek, FaCog, FaChartPie, FaPlay, FaStop, FaEye
 import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart';
 import { invoke } from '@tauri-apps/api/core';
 import { UpdateChecker } from './components/UpdateChecker';
+import { ToastContainer, toast } from './components/Toast';
 
 import {
   initDatabase, logActiveWindow, loadAllEvents, loadProjects,
@@ -224,34 +225,33 @@ function App() {
     let finalThreshold = settings.groupingThreshold || 10;
 
     if (settings.autoGrouping) {
-      // Automatik-Logik: Woche braucht mehr Gruppierung als Tag
       finalThreshold = currentView === 'week' ? 45 : 10;
-      // Später könnte man hier noch auf die Log-Dichte reagieren
     }
 
-    const events = await loadAllEvents(database, editMode, finalThreshold);
-    const projs = await loadProjects(database);
-    setCalendarEvents(events);
-    setProjects(projs);
-
-    // Tray-Tooltip mit heutigen gebuchten Stunden aktualisieren
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayEnd = new Date(today);
-      todayEnd.setHours(23, 59, 59, 999);
-      const manualEvents = events.filter(e =>
-        e.extendedProps?.type === 'manual' &&
-        new Date(e.start) >= today &&
-        new Date(e.start) <= todayEnd
-      );
-      const todayHours = manualEvents.reduce((sum: number, e: any) => {
-        if (!e.start || !e.end) return sum;
-        return sum + (new Date(e.end).getTime() - new Date(e.start).getTime()) / 3600000;
-      }, 0);
-      const tooltipText = `ClockworkHero • Heute: ${todayHours.toFixed(1)}h`;
-      invoke('update_tray_tooltip', { text: tooltipText }).catch(() => {});
-    } catch { /* Tray-Update ist optional */ }
+      const events = await loadAllEvents(database, editMode, finalThreshold);
+      const projs  = await loadProjects(database);
+      setCalendarEvents(events);
+      setProjects(projs);
+
+      // Tray-Tooltip mit heutigen gebuchten Stunden aktualisieren
+      const today    = new Date(); today.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(today); todayEnd.setHours(23, 59, 59, 999);
+      const todayHours = events
+        .filter((e: any) =>
+          e.extendedProps?.type === 'manual' &&
+          new Date(e.start) >= today &&
+          new Date(e.start) <= todayEnd
+        )
+        .reduce((sum: number, e: any) => {
+          if (!e.start || !e.end) return sum;
+          return sum + (new Date(e.end).getTime() - new Date(e.start).getTime()) / 3600000;
+        }, 0);
+      invoke('update_tray_tooltip', { text: `ClockworkHero • Heute: ${todayHours.toFixed(1)}h` }).catch(() => {});
+    } catch (e) {
+      console.error('refreshData Fehler:', e);
+      toast.error('Daten konnten nicht geladen werden', 'Bitte das Programm neu starten.');
+    }
   }
 
   const [editingSessionData, setEditingSessionData] = useState<{ projectId: string, description: string } | null>(null);
@@ -300,17 +300,25 @@ function App() {
   };
 
   const handleSaveSession = async (projectId: string, desc: string, start: Date, end: Date) => {
-    if (db) {
+    if (!db) return;
+    try {
       await saveSession(db, start, end, projectId, desc, editingSessionId);
       setShowSessionModal(false);
+      toast.success('Session gespeichert');
       refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings);
+    } catch (e) {
+      console.error('saveSession Fehler:', e);
+      toast.error('Speichern fehlgeschlagen', 'Die Session konnte nicht gespeichert werden.');
     }
   };
 
   const handleDeleteSession = async (id: string) => {
-    if (db) {
+    if (!db) return;
+    try {
       await deleteSession(db, id);
       refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings);
+    } catch (e) {
+      toast.error('Löschen fehlgeschlagen');
     }
   };
 
@@ -370,7 +378,7 @@ function App() {
 
   const startTimer = () => {
     if (!timerState.projectId) {
-      alert("Bitte wähle zuerst ein Projekt aus.");
+      toast.warning('Kein Projekt gewählt', 'Bitte wähle ein Projekt aus bevor du den Timer startest.');
       return;
     }
     const newState = {
@@ -383,18 +391,20 @@ function App() {
   };
 
   const stopTimer = async () => {
-    if (timerState.isRunning && timerState.startTime && db) {
-      const end = new Date();
-      const start = new Date(timerState.startTime);
-
+    if (!timerState.isRunning || !timerState.startTime || !db) return;
+    const end   = new Date();
+    const start = new Date(timerState.startTime);
+    try {
       await saveSession(db, start, end, timerState.projectId, timerState.description);
-
-      const newState = { isRunning: false, startTime: null, projectId: "", description: "" };
-      setTimerState(newState);
-      localStorage.removeItem('clockwork_timer');
-
-      refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings);
+      const hrs = ((end.getTime() - start.getTime()) / 3600000).toFixed(1);
+      toast.success('Timer gestoppt', `${hrs} Std gespeichert`);
+    } catch (e) {
+      toast.error('Timer konnte nicht gespeichert werden');
     }
+    const newState = { isRunning: false, startTime: null, projectId: "", description: "" };
+    setTimerState(newState);
+    localStorage.removeItem('clockwork_timer');
+    refreshData(db, isEditMode, viewMode === 'dashboard' ? 'day' : viewMode, settings);
   };
 
   // ...
@@ -437,7 +447,8 @@ function App() {
         db={db}
       />
 
-      {/* ── Update-Benachrichtigung (floating toast) ──────────────────── */}
+      {/* ── Globale Notifications ─────────────────────────────────────── */}
+      <ToastContainer />
       <UpdateChecker />
 
       <div className="app-header">

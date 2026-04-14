@@ -20,12 +20,14 @@ import { AppIcon } from './AppIcon';
  */
 
 // ─── Konstanten ──────────────────────────────────────────────────────────────
-const ICON_SIZE   = 32;
-const ICON_GAP    = 8;
+const ICON_SIZE   = 30;   // Renderbereich des Icons
+const ICON_PAD    = 3;    // Padding innerhalb des Containers
+const ICON_BOX    = ICON_SIZE + ICON_PAD * 2;  // Gesamtgrösse des Containers
+const ICON_GAP    = 6;
 const CARD_WIDTH  = 180;
 const CARD_HEIGHT = 38;
 const CARD_GAP    = 10;
-const EDGE_OFFSET = 6;
+const EDGE_OFFSET = 8;
 
 // ─── Typen ───────────────────────────────────────────────────────────────────
 export interface ColumnInfo {
@@ -80,21 +82,19 @@ export const ActivityOverlay: React.FC<Props> = ({
         // ── Icons (Woche / Task-Modus) ───────────────────────────────────────
         if (useIcons) {
             const maxCols = Math.max(1, Math.floor(
-                (col.width * 0.9 - EDGE_OFFSET) / (ICON_SIZE + ICON_GAP)
+                (col.width * 0.9 - EDGE_OFFSET) / (ICON_BOX + ICON_GAP)
             ));
             const iconCol = slotRank % maxCols;
             const iconRow = Math.floor(slotRank / maxCols);
 
-            // Von rechts nach links wachsend (innerhalb der Spalte)
             const left = col.left + col.width
                 - EDGE_OFFSET
-                - ICON_SIZE
-                - iconCol * (ICON_SIZE + ICON_GAP);
+                - ICON_BOX
+                - iconCol * (ICON_BOX + ICON_GAP);
 
-            // Sichtbare Position = Header-Offset + Absolute-Zeit-Position − Scroll
             const top = gridTopOffset + baseTop - scrollTop
                 + 2
-                + iconRow * (ICON_SIZE + ICON_GAP);
+                + iconRow * (ICON_BOX + ICON_GAP);
 
             return (
                 <div
@@ -104,14 +104,15 @@ export const ActivityOverlay: React.FC<Props> = ({
                         position:       'absolute',
                         top:            `${top}px`,
                         left:           `${left}px`,
-                        width:          `${ICON_SIZE}px`,
-                        height:         `${ICON_SIZE}px`,
+                        width:          `${ICON_BOX}px`,
+                        height:         `${ICON_BOX}px`,
                         pointerEvents:  'auto',
                         opacity:        activityOpacity,
                         cursor:         'pointer',
-                        borderRadius:   '6px',
-                        padding:        '4px',
+                        borderRadius:   '7px',
+                        padding:        `${ICON_PAD}px`,
                         boxSizing:      'border-box',
+                        overflow:       'visible',   // ← kein Clipping am Rand
                         display:        'flex',
                         alignItems:     'center',
                         justifyContent: 'center',
@@ -119,11 +120,20 @@ export const ActivityOverlay: React.FC<Props> = ({
                     onClick={e => { e.stopPropagation(); onEventClick(props); }}
                     title={props.simpleName}
                 >
-                    <AppIcon
-                        appName={props.simpleName}
-                        path={props.exePath}
-                        fallbackColor={props.appColor}
-                    />
+                    <div style={{
+                        width:    `${ICON_SIZE}px`,
+                        height:   `${ICON_SIZE}px`,
+                        display:  'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                    }}>
+                        <AppIcon
+                            appName={props.simpleName}
+                            path={props.exePath}
+                            fallbackColor={props.appColor}
+                        />
+                    </div>
                 </div>
             );
         }
@@ -171,9 +181,10 @@ export const ActivityOverlay: React.FC<Props> = ({
                 onClick={e => { e.stopPropagation(); onEventClick(props); }}
             >
                 <div style={{
-                    width:          '28px',
-                    height:         '28px',
+                    width:          '26px',
+                    height:         '26px',
                     flexShrink:     0,
+                    overflow:       'visible',
                     display:        'flex',
                     alignItems:     'center',
                     justifyContent: 'center',
