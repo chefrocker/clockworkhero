@@ -10,17 +10,34 @@ type UpdateState =
     | { phase: 'ready' }
     | { phase: 'error'; message: string };
 
-export const UpdateChecker: React.FC = () => {
+// Kann auch von außen aufgerufen werden (z.B. aus den Einstellungen)
+export async function triggerUpdateCheck(): Promise<{ available: boolean; version?: string }> {
+    try {
+        const update = await check();
+        if (update?.available) return { available: true, version: update.version };
+        return { available: false };
+    } catch {
+        return { available: false };
+    }
+}
+
+interface Props {
+    // Wenn true, prüft die Komponente einmalig beim Mount (Startup-Check)
+    checkOnMount?: boolean;
+}
+
+export const UpdateChecker: React.FC<Props> = ({ checkOnMount = true }) => {
     const [state, setState] = useState<UpdateState>({ phase: 'idle' });
     const [dismissed, setDismissed] = useState(false);
 
     useEffect(() => {
+        if (!checkOnMount) return;
         // Beim Start prüfen (mit 3s Verzögerung damit App vollständig geladen ist)
         const timer = setTimeout(async () => {
             await checkForUpdate();
         }, 3000);
         return () => clearTimeout(timer);
-    }, []);
+    }, [checkOnMount]);
 
     const checkForUpdate = async () => {
         try {

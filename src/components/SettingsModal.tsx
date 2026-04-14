@@ -2,9 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Cropper from 'react-easy-crop';
 import Database from '@tauri-apps/plugin-sql';
 import { getVersion } from '@tauri-apps/api/app';
+import { exit } from '@tauri-apps/plugin-process';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
-import { FaCog, FaSave, FaClock, FaPalette, FaDatabase, FaBriefcase, FaCheck, FaTimes, FaLock, FaUnlock, FaHdd, FaKey, FaUndo, FaInfoCircle, FaSun, FaMoon, FaFileExcel, FaTrash } from 'react-icons/fa';
+import { FaCog, FaSave, FaClock, FaPalette, FaDatabase, FaBriefcase, FaCheck, FaTimes, FaLock, FaUnlock, FaHdd, FaKey, FaUndo, FaInfoCircle, FaSun, FaMoon, FaFileExcel, FaTrash, FaSync, FaPowerOff } from 'react-icons/fa';
+import { triggerUpdateCheck } from './UpdateChecker';
 import { AppSettings, Project, DaySchedule } from '../types';
 import { AppIcon } from './AppIcon';
 import { getCroppedImg } from '../utils/imageUtils';
@@ -77,11 +79,35 @@ export const SettingsModal: React.FC<Props> = ({
 
     const [activeTab, setActiveTab] = useState<'general' | 'tracking' | 'projects' | 'colors' | 'database' | 'about'>('general');
     const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
-    const [appVersion, setAppVersion] = useState<string>('…');
+    const [appVersion,    setAppVersion]    = useState<string>('…');
+    const [updateStatus,  setUpdateStatus]  = useState<'idle' | 'checking' | 'uptodate' | 'available'>('idle');
+    const [updateVersion, setUpdateVersion] = useState<string>('');
+    const [confirmQuit,   setConfirmQuit]   = useState(false);
 
     useEffect(() => {
         getVersion().then(setAppVersion).catch(() => setAppVersion('?'));
     }, []);
+
+    const handleCheckUpdate = async () => {
+        setUpdateStatus('checking');
+        const result = await triggerUpdateCheck();
+        if (result.available && result.version) {
+            setUpdateStatus('available');
+            setUpdateVersion(result.version);
+        } else {
+            setUpdateStatus('uptodate');
+            setTimeout(() => setUpdateStatus('idle'), 4000);
+        }
+    };
+
+    const handleQuit = () => {
+        if (!confirmQuit) {
+            setConfirmQuit(true);
+            setTimeout(() => setConfirmQuit(false), 4000);
+            return;
+        }
+        exit(0);
+    };
 
     // State für Image Cropper
     const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
@@ -438,11 +464,84 @@ export const SettingsModal: React.FC<Props> = ({
 
                         {activeTab === 'about' && (
                             <div style={{ textAlign: 'center', padding: '40px' }}>
-                                <h2 style={{ color: 'var(--text-color)', marginBottom: '10px' }}>ClockworkHero</h2>
-                                <div style={{ fontSize: '1.2rem', color: 'var(--text-secondary)', marginBottom: '30px' }}>Version {appVersion}</div>
-                                <div style={{ background: 'var(--bg-color)', padding: '30px', borderRadius: '12px', border: '1px solid var(--border-color)', maxWidth: '600px', margin: '0 auto', textAlign: 'left' }}>
+                                <h2 style={{ color: 'var(--text-color)', marginBottom: '6px' }}>ClockworkHero</h2>
+                                <div style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', marginBottom: '28px' }}>
+                                    Version {appVersion}
+                                </div>
+
+                                {/* ── Update-Bereich ── */}
+                                <div style={{ maxWidth: '420px', margin: '0 auto 24px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    <button
+                                        onClick={handleCheckUpdate}
+                                        disabled={updateStatus === 'checking'}
+                                        style={{
+                                            padding: '10px 20px',
+                                            borderRadius: '8px',
+                                            border: '1px solid var(--border-color)',
+                                            background: updateStatus === 'available' ? '#3b82f6' : 'var(--panel-bg)',
+                                            color: updateStatus === 'available' ? 'white' : 'var(--text-color)',
+                                            fontWeight: 600,
+                                            fontSize: '0.9rem',
+                                            cursor: updateStatus === 'checking' ? 'default' : 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '8px',
+                                            transition: 'all 0.2s',
+                                        }}
+                                    >
+                                        <FaSync size={13} style={{ animation: updateStatus === 'checking' ? 'spin 1s linear infinite' : 'none' }} />
+                                        {updateStatus === 'checking'  && 'Suche nach Updates…'}
+                                        {updateStatus === 'uptodate'  && '✓ Du hast die neueste Version'}
+                                        {updateStatus === 'available' && `Update auf ${updateVersion} verfügbar!`}
+                                        {updateStatus === 'idle'      && 'Nach Updates suchen'}
+                                    </button>
+
+                                    {updateStatus === 'available' && (
+                                        <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                                            Das Update wird beim nächsten Start oder über die Benachrichtigung unten rechts installiert.
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* ── Lizenz ── */}
+                                <div style={{ background: 'var(--bg-color)', padding: '24px 30px', borderRadius: '12px', border: '1px solid var(--border-color)', maxWidth: '420px', margin: '0 auto 24px', textAlign: 'left' }}>
                                     <h4 style={{ marginTop: 0, color: 'var(--text-color)' }}>MIT License</h4>
-                                    <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>Copyright (c) 2026 Sandro Ballarini</p>
+                                    <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.6', margin: 0 }}>
+                                        Copyright © 2026 Sandro Ballarini<br />
+                                        Open Source – frei verwendbar und veränderbar.
+                                    </p>
+                                </div>
+
+                                {/* ── Programm beenden ── */}
+                                <div style={{ maxWidth: '420px', margin: '0 auto' }}>
+                                    <button
+                                        onClick={handleQuit}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px 20px',
+                                            borderRadius: '8px',
+                                            border: `1px solid ${confirmQuit ? '#ef4444' : 'var(--border-color)'}`,
+                                            background: confirmQuit ? '#ef4444' : 'var(--panel-bg)',
+                                            color: confirmQuit ? 'white' : '#ef4444',
+                                            fontWeight: 600,
+                                            fontSize: '0.9rem',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '8px',
+                                            transition: 'all 0.2s',
+                                        }}
+                                    >
+                                        <FaPowerOff size={13} />
+                                        {confirmQuit ? 'Wirklich beenden?' : 'Programm beenden'}
+                                    </button>
+                                    {confirmQuit && (
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                                            Nochmal klicken zum Bestätigen. Läuft ein Timer, wird er nicht gespeichert.
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}

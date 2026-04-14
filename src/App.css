@@ -518,6 +518,11 @@ textarea.input-text {
   border-top: 1px solid var(--border-color);
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 @keyframes slideUp {
   from {
     opacity: 0;
