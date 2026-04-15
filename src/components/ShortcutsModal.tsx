@@ -15,6 +15,7 @@ const SHORTCUTS: { key: string; desc: string; group?: string }[] = [
   { key: 'A',             desc: 'Auswertungs-Dashboard' },
   { key: 'Aktionen',      desc: '',                     group: 'separator' },
   { key: 'N',             desc: 'Neue Session erfassen' },
+  { key: 'L',             desc: 'Sessionen-Liste öffnen' },
   { key: 'M',             desc: 'Buchungs-Modus / Aktivitäts-Ansicht wechseln' },
   { key: 'Ctrl + ,',      desc: 'Einstellungen öffnen' },
   { key: '?',             desc: 'Diese Hilfe anzeigen' },

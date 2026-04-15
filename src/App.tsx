@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { FaCalendarDay, FaCalendarWeek, FaCog, FaChartPie, FaPlay, FaStop, FaEye, FaPencilAlt, FaKeyboard } from 'react-icons/fa';
+import { FaCalendarDay, FaCalendarWeek, FaCog, FaChartPie, FaPlay, FaStop, FaEye, FaPencilAlt, FaKeyboard, FaList } from 'react-icons/fa';
 import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart';
 import { UpdateChecker }        from './components/UpdateChecker';
 import { ToastContainer, toast } from './components/Toast';
@@ -20,6 +20,7 @@ import { useTimer }             from './hooks/useTimer';
 import { useCalendarData }      from './hooks/useCalendarData';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { ShortcutsModal }       from './components/ShortcutsModal';
+import { SessionsPanel }        from './components/SessionsPanel';
 
 import './App.css';
 
@@ -35,6 +36,7 @@ function App() {
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showSettings,      setShowSettings]      = useState(false);
   const [showShortcuts,     setShowShortcuts]     = useState(false);
+  const [showSessionsPanel, setShowSessionsPanel] = useState(false);
 
   const [selectedActivity,   setSelectedActivity]   = useState<any>(null);
   const [selection,          setSelection]           = useState<{ start: Date; end: Date } | null>(null);
@@ -66,7 +68,7 @@ function App() {
     viewMode,
     showSessionModal, showActivityModal, showSettings,
     setViewMode, setIsEditMode,
-    setShowSessionModal, setShowActivityModal, setShowSettings, setShowShortcuts,
+    setShowSessionModal, setShowActivityModal, setShowSettings, setShowShortcuts, setShowSessionsPanel,
     openNewSession,
   });
 
@@ -151,17 +153,38 @@ function App() {
     if (db) { await deleteProject(db, id); refresh(); }
   };
 
+  const handleEditFromPanel = (event: any) => {
+    const props = event.extendedProps;
+    setSelection({ start: new Date(event.start), end: new Date(event.end) });
+    setEditingSessionId(props.dbId);
+    setEditingSessionData({ projectId: String(props.projectId ?? ''), description: props.description || '' });
+    setShowSessionModal(true);
+  };
+
   const handleReset = async () => {
     if (db) { await resetDatabase(db); window.location.reload(); }
   };
 
-  // ── Tagesfortschritt ─────────────────────────────────────────────────────
-  const todayHours = (() => {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+  // ── Tages- & Wochenfortschritt ───────────────────────────────────────────
+  const { todayHours, weekHours } = (() => {
+    const now      = new Date();
+    const today    = new Date(now); today.setHours(0, 0, 0, 0);
     const todayEnd = new Date(today); todayEnd.setDate(todayEnd.getDate() + 1);
-    return calendarEvents
-      .filter(e => e.extendedProps?.type === 'manual' && new Date(e.start) >= today && new Date(e.start) < todayEnd)
-      .reduce((sum, e) => sum + (new Date(e.end).getTime() - new Date(e.start).getTime()) / 3600000, 0);
+
+    // Montag dieser Woche (oder Sonntag je nach firstDayOfWeek)
+    const firstDay  = settings.firstDayOfWeek ?? 1;
+    const dayOfWeek = now.getDay(); // 0=So, 1=Mo, ...
+    const diff      = (dayOfWeek - firstDay + 7) % 7;
+    const weekStart = new Date(today); weekStart.setDate(today.getDate() - diff);
+    const weekEnd   = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 7);
+
+    const manualSessions = calendarEvents.filter(e => e.extendedProps?.type === 'manual');
+    const hours = (from: Date, to: Date) =>
+      manualSessions
+        .filter(e => new Date(e.start) >= from && new Date(e.start) < to)
+        .reduce((sum, e) => sum + (new Date(e.end).getTime() - new Date(e.start).getTime()) / 3600000, 0);
+
+    return { todayHours: hours(today, todayEnd), weekHours: hours(weekStart, weekEnd) };
   })();
   const dailyTarget = settings.dailyTarget ?? 8;
   const targetPct   = Math.min(100, (todayHours / dailyTarget) * 100);
@@ -207,6 +230,14 @@ function App() {
       />
 
       <ShortcutsModal isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
+      <SessionsPanel
+        isOpen={showSessionsPanel}
+        onClose={() => setShowSessionsPanel(false)}
+        events={calendarEvents}
+        projects={projects}
+        onEdit={handleEditFromPanel}
+        onDelete={handleDeleteSession}
+      />
       <ToastContainer />
       <UpdateChecker />
 
@@ -251,15 +282,26 @@ function App() {
           )}
         </div>
 
-        {/* Mitte: Tagesfortschritt */}
+        {/* Mitte: Tages- & Wochenfortschritt */}
         {viewMode !== 'dashboard' && isReady && (
-          <div className="header-progress" title={`Heute: ${todayHours.toFixed(1)}h von ${dailyTarget}h Tagesziel`}>
-            <div className="header-progress-label">
-              <span>{todayHours.toFixed(1)}h</span>
-              <span style={{ opacity: 0.5 }}>/ {dailyTarget}h</span>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+            <div className="header-progress" title={`Heute: ${todayHours.toFixed(1)}h von ${dailyTarget}h Tagesziel`}>
+              <div className="header-progress-label">
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Heute</span>
+                <span>{todayHours.toFixed(1)}h <span style={{ opacity: 0.45 }}>/ {dailyTarget}h</span></span>
+              </div>
+              <div className="header-progress-bar">
+                <div className="header-progress-fill" style={{ width: `${targetPct}%`, background: targetColor }} />
+              </div>
             </div>
-            <div className="header-progress-bar">
-              <div className="header-progress-fill" style={{ width: `${targetPct}%`, background: targetColor }} />
+            <div className="header-progress" title={`Diese Woche: ${weekHours.toFixed(1)}h`}>
+              <div className="header-progress-label">
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Woche</span>
+                <span>{weekHours.toFixed(1)}h</span>
+              </div>
+              <div className="header-progress-bar">
+                <div className="header-progress-fill" style={{ width: `${Math.min(100, (weekHours / (dailyTarget * 5)) * 100)}%`, background: '#6366f1' }} />
+              </div>
             </div>
           </div>
         )}
@@ -288,6 +330,9 @@ function App() {
             </button>
           )}
 
+          <button className="btn-settings" onClick={() => setShowSessionsPanel(true)} title="Sessionen-Liste (L)">
+            <FaList size={14} />
+          </button>
           <button className="btn-settings" onClick={() => setShowShortcuts(true)} title="Tastaturkürzel (?)">
             <FaKeyboard size={14} />
           </button>

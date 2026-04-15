@@ -14,6 +14,7 @@ interface Options {
   setShowActivityModal: (v: boolean) => void;
   setShowSettings:      (v: boolean) => void;
   setShowShortcuts:     (v: boolean) => void;
+  setShowSessionsPanel: (v: boolean) => void;
   openNewSession:    () => void;
 }
 
@@ -22,7 +23,7 @@ export function useKeyboardShortcuts({
   viewMode,
   showSessionModal, showActivityModal, showSettings,
   setViewMode, setIsEditMode,
-  setShowSessionModal, setShowActivityModal, setShowSettings, setShowShortcuts,
+  setShowSessionModal, setShowActivityModal, setShowSettings, setShowShortcuts, setShowSessionsPanel,
   openNewSession,
 }: Options) {
   useEffect(() => {
@@ -74,6 +75,10 @@ export function useKeyboardShortcuts({
         case '?':
           if (!modalOpen) { setShowShortcuts(true); e.preventDefault(); }
           break;
+
+        case 'l': case 'L':
+          if (!modalOpen) { setShowSessionsPanel(true); e.preventDefault(); }
+          break;
       }
     };
 
@@ -83,7 +88,7 @@ export function useKeyboardShortcuts({
     calendarRef, viewMode,
     showSessionModal, showActivityModal, showSettings,
     setViewMode, setIsEditMode,
-    setShowSessionModal, setShowActivityModal, setShowSettings, setShowShortcuts,
+    setShowSessionModal, setShowActivityModal, setShowSettings, setShowShortcuts, setShowSessionsPanel,
     openNewSession,
   ]);
 }
