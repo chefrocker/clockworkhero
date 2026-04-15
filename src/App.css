@@ -209,6 +209,36 @@ body.dark-mode .timer-running {
   flex-shrink: 0;
 }
 
+/* ── Tagesfortschritt im Header ─────────────────────────────────────── */
+.header-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 100px;
+  max-width: 140px;
+  cursor: default;
+}
+.header-progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-color);
+  line-height: 1;
+}
+.header-progress-bar {
+  height: 5px;
+  background: var(--border-color);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.header-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s ease, background 0.4s ease;
+  min-width: 3px;
+}
+
 /* View-Switcher (Tag / Woche / Auswertung) */
 .view-switcher {
   display: flex;

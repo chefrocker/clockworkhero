@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { FaCalendarDay, FaCalendarWeek, FaCog, FaChartPie, FaPlay, FaStop, FaEye, FaPencilAlt } from 'react-icons/fa';
+import { FaCalendarDay, FaCalendarWeek, FaCog, FaChartPie, FaPlay, FaStop, FaEye, FaPencilAlt, FaKeyboard } from 'react-icons/fa';
 import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart';
 import { UpdateChecker }        from './components/UpdateChecker';
 import { ToastContainer, toast } from './components/Toast';
@@ -19,6 +19,7 @@ import { useAppInit }           from './hooks/useAppInit';
 import { useTimer }             from './hooks/useTimer';
 import { useCalendarData }      from './hooks/useCalendarData';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { ShortcutsModal }       from './components/ShortcutsModal';
 
 import './App.css';
 
@@ -33,6 +34,7 @@ function App() {
   const [showSessionModal,  setShowSessionModal]  = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showSettings,      setShowSettings]      = useState(false);
+  const [showShortcuts,     setShowShortcuts]     = useState(false);
 
   const [selectedActivity,   setSelectedActivity]   = useState<any>(null);
   const [selection,          setSelection]           = useState<{ start: Date; end: Date } | null>(null);
@@ -64,7 +66,7 @@ function App() {
     viewMode,
     showSessionModal, showActivityModal, showSettings,
     setViewMode, setIsEditMode,
-    setShowSessionModal, setShowActivityModal, setShowSettings,
+    setShowSessionModal, setShowActivityModal, setShowSettings, setShowShortcuts,
     openNewSession,
   });
 
@@ -153,6 +155,18 @@ function App() {
     if (db) { await resetDatabase(db); window.location.reload(); }
   };
 
+  // ── Tagesfortschritt ─────────────────────────────────────────────────────
+  const todayHours = (() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today); todayEnd.setDate(todayEnd.getDate() + 1);
+    return calendarEvents
+      .filter(e => e.extendedProps?.type === 'manual' && new Date(e.start) >= today && new Date(e.start) < todayEnd)
+      .reduce((sum, e) => sum + (new Date(e.end).getTime() - new Date(e.start).getTime()) / 3600000, 0);
+  })();
+  const dailyTarget = settings.dailyTarget ?? 8;
+  const targetPct   = Math.min(100, (todayHours / dailyTarget) * 100);
+  const targetColor = targetPct >= 100 ? '#10b981' : targetPct >= 60 ? '#3b82f6' : '#f59e0b';
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="app-container">
@@ -192,6 +206,7 @@ function App() {
         db={db}
       />
 
+      <ShortcutsModal isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
       <ToastContainer />
       <UpdateChecker />
 
@@ -236,6 +251,19 @@ function App() {
           )}
         </div>
 
+        {/* Mitte: Tagesfortschritt */}
+        {viewMode !== 'dashboard' && isReady && (
+          <div className="header-progress" title={`Heute: ${todayHours.toFixed(1)}h von ${dailyTarget}h Tagesziel`}>
+            <div className="header-progress-label">
+              <span>{todayHours.toFixed(1)}h</span>
+              <span style={{ opacity: 0.5 }}>/ {dailyTarget}h</span>
+            </div>
+            <div className="header-progress-bar">
+              <div className="header-progress-fill" style={{ width: `${targetPct}%`, background: targetColor }} />
+            </div>
+          </div>
+        )}
+
         {/* Rechts: Ansicht + Modus + Einstellungen */}
         <div className="header-right">
           <div className="view-switcher">
@@ -260,7 +288,10 @@ function App() {
             </button>
           )}
 
-          <button className="btn-settings" onClick={() => setShowSettings(true)} title="Einstellungen öffnen">
+          <button className="btn-settings" onClick={() => setShowShortcuts(true)} title="Tastaturkürzel (?)">
+            <FaKeyboard size={14} />
+          </button>
+          <button className="btn-settings" onClick={() => setShowSettings(true)} title="Einstellungen öffnen (Ctrl+,)">
             <FaCog size={14} /> Einstellungen
           </button>
         </div>
